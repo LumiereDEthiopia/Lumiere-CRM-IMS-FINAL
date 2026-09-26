@@ -1,0 +1,146 @@
+/* Accounting reports — extends admin-styles.css, no new visual style. */
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.filter-row .form-field {
+  min-width: 170px;
+}
+
+.quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.btn-quick {
+  padding: 0.4rem 0.7rem;
+  border: 1px solid #e0e0e0;
+  background: #fafafa;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  color: #444;
+  cursor: pointer;
+}
+
+.btn-quick:hover {
+  background: #fbf7ef;
+  border-color: #c9a96e;
+}
+
+.back-link {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: #8a6d3b;
+  text-decoration: none;
+  margin-bottom: 0.35rem;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.report-header {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.report-company {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  color: #1a1a1a;
+}
+
+.report-meta {
+  margin: 0.15rem 0;
+  font-size: 0.8rem;
+  color: #6b6b6b;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.footer-cell {
+  font-weight: 700;
+  border-top: 2px solid #c9a96e;
+  background: #fbf7ef;
+}
+
+.section-title {
+  margin: 1.1rem 0 0.5rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a6d3b;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.55rem 0.9rem;
+  border-top: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.total-row.grand {
+  font-weight: 700;
+  background: #fbf7ef;
+  border-top: 2px solid #c9a96e;
+}
+
+.accounting-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.accounting-icon {
+  font-size: 1.6rem;
+}
+
+.accounting-card .btn {
+  margin-top: 0.5rem;
+  align-self: flex-start;
+}
+
+.balance-check {
+  margin-top: 1rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.balance-check.good {
+  background: #E8F5E9;
+  color: #2E7D32;
+  border: 1px solid #C8E6C9;
+}
+
+.balance-check.bad {
+  background: #FDF0F0;
+  color: #C0392B;
+  border: 1px solid #F5C6CB;
+}
+
+@media print {
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+  .report-header {
+    border: 1px solid #333;
+  }
+}

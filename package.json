@@ -1,0 +1,29 @@
+{
+  "name": "perfume-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack perfume business management platform (inventory, CRM, sales, employees, accounting)",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "client": "cd client && npm run dev",
+    "server": "cd server && npm run dev",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "postinstall": "npm --prefix client install --include=dev && npm --prefix server install --include=dev",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "start:prod": "npm --prefix server run start:prod",
+    "db:generate": "cd server && npx prisma generate",
+    "db:migrate": "cd server && npx prisma migrate dev",
+    "db:push": "cd server && npx prisma db push",
+    "seed": "cd server && npm run seed",
+    "seed:demo": "cd server && npm run seed:demo",
+    "seed:permissions": "cd server && npm run seed:permissions",
+    "db:studio": "cd server && npx prisma studio"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

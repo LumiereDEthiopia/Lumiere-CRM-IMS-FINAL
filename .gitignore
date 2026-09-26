@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+node_modules
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+prisma/dev.db
+prisma/*.db
+prisma/*.db-journal
+server/prisma/dev.db
+server/prisma/*.db
+server/prisma/*.db-journal
+
+# Build outputs
+dist/
+build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Temp files
+tmp/
+temp/
+
+# Local build/tool output that must never be committed
+client/dev/
+client/build-check.txt
+git-files.txt
+tmp*
+server-*.txt
+temp-*

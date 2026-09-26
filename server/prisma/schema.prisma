@@ -1,0 +1,1499 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  roles       Role[]   @relation("PermissionToRole")
+}
+
+model Role {
+  id          String             @id @default(cuid())
+  name        String             @unique
+  description String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  orgUsers    OrganizationUser[]
+  users       User[]
+  permissions Permission[]       @relation("PermissionToRole")
+}
+
+model User {
+  id            String             @id @default(cuid())
+  name          String
+  email         String             @unique
+  passwordHash  String
+  phone         String?
+  roleId        String?
+  isActive      Boolean            @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  apiKeys       ApiKey[]
+  auditLogs     AuditLog[]
+  employee      Employee?
+  exports       ExportLog[]
+  notifications Notification[]
+  organizations OrganizationUser[]
+  role          Role?              @relation(fields: [roleId], references: [id])
+
+  salaryHistoryCreated    EmployeeSalaryHistory[]
+  salaryPaymentsProcessed EmployeeSalaryPayment[]
+
+  @@index([email])
+  @@index([roleId])
+  @@index([isActive])
+}
+
+model Organization {
+  id                String                @id @default(cuid())
+  name              String
+  legalName         String?
+  code              String                @unique
+  description       String?
+  email             String?
+  phone             String?
+  website           String?
+  address           String?
+  city              String?
+  country           String?
+  currency          String                @default("USD")
+  timezone          String                @default("UTC")
+  dateFormat        String                @default("YYYY-MM-DD")
+  logoUrl           String?
+  logoKey           String?
+  isActive          Boolean               @default(true)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  apiKeys           ApiKey[]
+  approvals         ApprovalRequest[]
+  exportLogs        ExportLog[]
+  locations         Location[]
+  settings          OrganizationSetting[]
+  users             OrganizationUser[]
+  retentionPolicies RetentionPolicy[]
+  webhookEndpoints  WebhookEndpoint[]
+  webhookEvents     WebhookEvent[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model OrganizationUser {
+  id               String       @id @default(cuid())
+  organizationId   String
+  userId           String
+  roleId           String?
+  isPrimary        Boolean      @default(false)
+  locationAccess   String?
+  departmentAccess String?
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  role             Role?        @relation(fields: [roleId], references: [id])
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Brand {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  logoUrl     String?
+  country     String?
+  website     String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  logoKey     String?
+  products    Product[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  slug        String     @unique
+  description String?
+  imageUrl    String?
+  imageKey    String?
+  parentId    String?
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  parent      Category?  @relation("CategoryParent", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryParent")
+  products    Product[]
+
+  @@index([parentId])
+  @@index([slug])
+  @@index([isActive])
+}
+
+model Product {
+  id               String          @id @default(cuid())
+  name             String
+  slug             String          @unique
+  description      String?
+  shortDescription String?
+  brandId          String
+  categoryId       String?
+  gender           String?
+  sku              String?
+  barcode          String?         @unique
+  size             String?
+  unit             String?
+  concentration    String?
+  year             Int?
+  country          String?
+  price            Decimal         @default(0)
+  price100ml       Decimal?
+  costPrice        Decimal         @default(0)
+  compareAtPrice   Decimal?
+  stockQuantity    Decimal         @default(0)
+  stock50ml        Decimal         @default(0)
+  stock100ml       Decimal         @default(0)
+  minimumStock     Decimal         @default(0)
+  isActive         Boolean         @default(true)
+  isFeatured       Boolean         @default(false)
+  isNew            Boolean         @default(false)
+  isLuxury         Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  dayNight         String?
+  fragranceProfile String?
+  rating           Float?
+  seasons          String?
+  productType      String          @default("PERFUME")
+  inventory        Inventory[]
+  category         Category?       @relation(fields: [categoryId], references: [id])
+  brand            Brand           @relation(fields: [brandId], references: [id])
+  accords          ProductAccord[]
+  images           ProductImage[]
+  notes            ProductNote[]
+  purchaseItems    PurchaseItem[]
+  saleItems        SaleItem[]
+  stockMovements   StockMovement[]
+  productItems     ProductItem[]
+@@map("product")
+  @@index([brandId])
+  @@index([categoryId])
+  @@index([slug])
+  @@index([sku])
+  @@index([barcode])
+  @@index([gender])
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([isNew])
+  @@index([isLuxury])
+  @@index([createdAt])
+  // Same product code may be reused across bottle sizes (50ml / 100ml) — identified by size
+  @@unique([sku, size])
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  imageUrl  String
+  objectKey String   @unique
+  altText   String?
+  sortOrder Int      @default(0)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([objectKey])
+}
+
+model Accord {
+  id             String          @id @default(cuid())
+  name           String          @unique
+  slug           String          @unique
+  color          String?
+  description    String?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  productAccords ProductAccord[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model ProductAccord {
+  id        String   @id @default(cuid())
+  productId String
+  accordId  String
+  intensity Int      @default(50)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  accord    Accord   @relation(fields: [accordId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, accordId])
+  @@index([productId])
+  @@index([accordId])
+}
+
+model FragranceNote {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  slug         String        @unique
+  description  String?
+  imageUrl     String?
+  imageKey     String?
+  // Group/Sub-Group classification
+  groupId      String?
+  subGroupId   String?
+  examples     String?       // comma-separated examples/aliases
+  color        String?       // hex color code
+  status       String        @default("active") // active, inactive
+  keywords     String?       // comma-separated search keywords
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  productNotes ProductNote[]
+  // Relations
+  group        PerfumeNoteGroup?      @relation(fields: [groupId], references: [id])
+  subGroup     PerfumeNoteSubGroup?   @relation(fields: [subGroupId], references: [id])
+
+  @@index([slug])
+  @@index([groupId])
+  @@index([subGroupId])
+  @@index([status])
+}
+
+model ProductNote {
+  id              String        @id @default(cuid())
+  productId       String
+  fragranceNoteId String
+  noteType        String
+  sortOrder       Int           @default(0)
+  createdAt       DateTime      @default(now())
+  fragranceNote   FragranceNote @relation(fields: [fragranceNoteId], references: [id], onDelete: Cascade)
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, fragranceNoteId, noteType])
+  @@index([productId])
+  @@index([fragranceNoteId])
+  @@index([noteType])
+}
+
+model Customer {
+  id                    String                @id @default(cuid())
+  customerCode          String                @unique
+  name                  String
+  email                 String?               @unique
+  phone                 String?
+  alternativePhone      String?
+  address               String?
+  city                  String?
+  country               String?
+  dateOfBirth           DateTime?
+  gender                String?
+  customerType          String                @default("INDIVIDUAL")
+  status                String                @default("LEAD")
+  source                String?
+  locationId            String?
+  notes                 String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  tinNumber             String?
+  tinVerified           Boolean               @default(false)
+  tinVerifiedAt         DateTime?
+  tinVerificationSource String?
+  location              Location?             @relation(fields: [locationId], references: [id])
+  interactions          CustomerInteraction[]
+  tasks                 CustomerTask[]
+  sales                 Sale[]
+  tags                  CustomerTag[]         @relation("CustomerToCustomerTag")
+
+  @@index([customerCode])
+  @@index([email])
+  @@index([phone])
+  @@index([status])
+  @@index([customerType])
+  @@index([createdAt])
+  @@index([tinNumber])
+}
+
+model Location {
+  id             String          @id @default(cuid())
+  organizationId String?
+  name           String
+  code           String
+  type           String          @default("OTHER")
+  description    String?
+  address        String?
+  city           String?
+  country        String?
+  phone          String?
+  email          String?
+  managerId      String?         @unique
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  customers      Customer[]
+  employees      Employee[]
+  inventory      Inventory[]
+  manager        Employee?       @relation("LocationManager", fields: [managerId], references: [id])
+  organization   Organization?   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchases      Purchase[]
+  sales          Sale[]
+  transfersTo    StockTransfer[] @relation("ToLocation")
+  transfersFrom  StockTransfer[] @relation("FromLocation")
+  itemInventories   ItemInventory[]
+  itemMovements     ItemMovement[]
+  itemTransfersFrom ItemTransfer[] @relation("ItemTransferFrom")
+  itemTransfersTo   ItemTransfer[] @relation("ItemTransferTo")
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@index([code])
+  @@index([type])
+  @@index([isActive])
+}
+
+model Department {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  code        String     @unique
+  description String?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  employees   Employee[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model Employee {
+  id                    String             @id @default(cuid())
+  employeeCode          String             @unique
+  firstName             String
+  middleName            String?
+  lastName              String
+  preferredName         String?
+  gender                String?
+  dateOfBirth           DateTime?
+  phone                 String?
+  alternativePhone      String?
+  email                 String?            @unique
+  address               String?
+  city                  String?
+  country               String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  jobTitle              String?
+  departmentId          String?
+  employmentType        String             @default("FULL_TIME")
+  employmentStatus      String             @default("ACTIVE")
+  hireDate              DateTime?
+  terminationDate       DateTime?
+  locationId            String?
+  managerId             String?
+  userId                String?            @unique
+  notes                 String?
+  profileImageUrl       String?
+  profileImageKey       String?
+  idFrontUrl            String?
+  idBackUrl             String?
+  pdfDocumentUrl        String?
+
+  // Salary (all optional so existing employees keep working)
+  salary                 Decimal?
+  salaryCurrency         String   @default("ETB")
+  salaryPaymentFrequency String   @default("MONTHLY")
+  salaryPaymentDay       Int?
+  salaryStartDate        DateTime?
+  salaryNotes            String?
+
+  // Identification
+  tinNumber       String?
+  pensionIdNumber String?
+
+  // Optional per-employee overrides — payroll rates normally come from PayrollRule
+  employeePensionRate Float?
+  employerPensionRate Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  salaryHistory  EmployeeSalaryHistory[]
+  salaryPayments EmployeeSalaryPayment[]
+
+  department      Department?        @relation(fields: [departmentId], references: [id])
+  location        Location?          @relation(fields: [locationId], references: [id])
+  manager         Employee?          @relation("ManagerHierarchy", fields: [managerId], references: [id])
+  subordinates    Employee[]         @relation("ManagerHierarchy")
+  user            User?              @relation(fields: [userId], references: [id])
+  documents       EmployeeDocument[]
+  managedLocation Location?          @relation("LocationManager")
+
+  @@index([managerId])
+  @@index([employeeCode])
+  @@index([email])
+  @@index([phone])
+  @@index([departmentId])
+  @@index([locationId])
+  @@index([employmentStatus])
+  @@index([employmentType])
+  @@index([hireDate])
+  @@index([userId])
+  @@index([salaryPaymentDay])
+}
+
+model EmployeeSalaryHistory {
+  id            String   @id @default(cuid())
+  employeeId    String
+  salary        Decimal
+  currency      String   @default("ETB")
+  effectiveFrom DateTime @default(now())
+  effectiveTo   DateTime?
+  reason        String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  employee  Employee @relation(fields: [employeeId], references: [id])
+  createdBy User?    @relation(fields: [createdById], references: [id])
+
+  @@index([employeeId])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@index([createdById])
+}
+
+model EmployeeSalaryPayment {
+  id               String   @id @default(cuid())
+  employeeId       String
+  payrollPeriod    String
+  scheduledDate    DateTime
+  paidDate         DateTime?
+  baseSalary       Decimal?
+  grossSalary      Decimal?
+  overtime         Decimal?
+  bonus            Decimal?
+  allowances       Decimal?
+  otherEarnings    Decimal?
+  currency         String   @default("ETB")
+  calculationSnapshot String?
+  incomeTax        Decimal?
+  employeePension  Decimal?
+  employerPension  Decimal?
+  otherDeductions  Decimal?
+  netSalary        Decimal?
+  paymentMethod    String?
+  paymentReference String?
+  status           String   @default("SCHEDULED")
+  notes            String?
+  processedById    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  processedBy User?    @relation(fields: [processedById], references: [id])
+
+  @@index([employeeId])
+  @@index([payrollPeriod])
+  @@index([scheduledDate])
+  @@index([paidDate])
+  @@index([status])
+  @@index([processedById])
+}
+
+model PayrollRule {
+  id            String    @id @default(cuid())
+  name          String
+  ruleType      String
+  rate          Float?
+  threshold     Decimal?
+  effectiveFrom DateTime  @default(now())
+  effectiveTo   DateTime?
+  legalReference String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([ruleType])
+  @@index([effectiveFrom])
+  @@index([effectiveTo])
+  @@index([isActive])
+  @@map("PayrollRule")
+}
+
+model EmployeeDocument {
+  id           String   @id @default(cuid())
+  employeeId   String
+  name         String
+  documentType String
+  objectKey    String   @unique
+  fileUrl      String?
+  mimeType     String?
+  fileSize     Int?
+  uploadedBy   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([objectKey])
+}
+
+model Inventory {
+  id                String   @id @default(cuid())
+  productId         String
+  locationId        String
+  quantity          Decimal  @default(0)
+  reservedQuantity  Decimal  @default(0)
+  availableQuantity Decimal  @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  location          Location @relation(fields: [locationId], references: [id])
+  product           Product  @relation(fields: [productId], references: [id])
+@@map("inventory")
+  @@unique([productId, locationId])
+  @@index([productId])
+  @@index([locationId])
+}
+
+model StockMovement {
+  id                String   @id @default(cuid())
+  productId         String
+  locationId        String
+  type              String
+  quantity          Decimal
+  referenceType     String?
+  referenceId       String?
+  reason            String?
+  notes             String?
+  userId            String?
+  createdAt         DateTime @default(now())
+  previousQuantity  Decimal?
+  resultingQuantity Decimal?
+  product           Product  @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@index([locationId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model StockTransfer {
+  id             String              @id @default(cuid())
+  transferNumber String              @unique
+  fromLocationId String
+  toLocationId   String
+  status         String              @default("PENDING")
+  notes          String?
+  createdBy      String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  toLocation     Location            @relation("ToLocation", fields: [toLocationId], references: [id])
+  fromLocation   Location            @relation("FromLocation", fields: [fromLocationId], references: [id])
+  items          StockTransferItem[]
+
+  @@index([fromLocationId])
+  @@index([toLocationId])
+  @@index([status])
+}
+
+model StockTransferItem {
+  id         String        @id @default(cuid())
+  transferId String
+  productId  String
+  quantity   Int
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@index([transferId])
+  @@index([productId])
+}
+
+model Supplier {
+  id            String            @id @default(cuid())
+  name          String
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  country       String?
+  taxNumber     String?
+  notes         String?
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  purchases     Purchase[]
+  products      SupplierProduct[]
+  items         Item[]
+
+  @@index([isActive])
+}
+
+model SupplierProduct {
+  id                   String   @id @default(cuid())
+  supplierId           String
+  productId            String
+  supplierSku          String?
+  costPrice            Decimal?
+  minimumOrderQuantity Int      @default(1)
+  leadTimeDays         Int?
+  isPreferred          Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  supplier             Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, productId])
+  @@index([supplierId])
+  @@index([productId])
+}
+
+model Purchase {
+  id             String         @id @default(cuid())
+  purchaseNumber String         @unique
+  supplierId     String
+  locationId     String
+  status         String         @default("DRAFT")
+  subtotal       Decimal        @default(0)
+  discount       Decimal        @default(0)
+  shippingCost   Decimal        @default(0)
+  total          Decimal        @default(0)
+  notes          String?
+  createdBy      String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  location       Location       @relation(fields: [locationId], references: [id])
+  supplier       Supplier       @relation(fields: [supplierId], references: [id])
+  items          PurchaseItem[]
+
+  @@index([supplierId])
+  @@index([locationId])
+  @@index([status])
+}
+
+model PurchaseItem {
+  id               String   @id @default(cuid())
+  purchaseId       String
+  productId        String?
+  itemId           String?
+  quantity         Int
+  receivedQuantity Int      @default(0)
+  unitCost         Decimal
+  totalCost        Decimal
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  supplierBatchNo  String?
+  notes            String?
+  product          Product? @relation(fields: [productId], references: [id])
+  item             Item?    @relation(fields: [itemId], references: [id])
+  purchase         Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId])
+  @@index([productId])
+  @@index([itemId])
+}
+
+model CustomerInteraction {
+  id               String    @id @default(cuid())
+  customerId       String
+  userId           String?
+  type             String
+  subject          String?
+  description      String?
+  interactionDate  DateTime  @default(now())
+  nextFollowUpDate DateTime?
+  status           String    @default("COMPLETED")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  customer         Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([userId])
+  @@index([type])
+  @@index([interactionDate])
+}
+
+model CustomerTask {
+  id          String    @id @default(cuid())
+  customerId  String
+  assignedTo  String?
+  title       String
+  description String?
+  dueDate     DateTime?
+  priority    String    @default("MEDIUM")
+  status      String    @default("TODO")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([assignedTo])
+  @@index([status])
+  @@index([priority])
+}
+
+model CustomerTag {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  color     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  customers Customer[] @relation("CustomerToCustomerTag")
+}
+
+model Sale {
+  id                       String     @id @default(cuid())
+  saleNumber               String     @unique
+  customerId               String?
+  locationId               String
+  status                   String     @default("PENDING")
+  subtotal                 Decimal    @default(0)
+  discount                 Decimal    @default(0)
+  total                    Decimal    @default(0)
+  notes                    String?
+  paymentMethod            String?
+  customerRegistrationNote String?
+  salesChannel             String     @default("DIRECT")
+  soldAt                   DateTime   @default(now())
+  createdBy                String?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+  taxInvoiceNumber         String?
+  vatRate                  Float      @default(0)
+  vatAmount                Decimal    @default(0)
+  withholdingRate          Float      @default(0)
+  withholdingAmount        Decimal    @default(0)
+  customerTin              String?
+  customerTinName          String?
+  customerTinVerified      Boolean    @default(false)
+  // --- Direct Sale / Discount / Free Gift (additive — legacy rows keep defaults) ---
+  saleType                 String     @default("DIRECT") // DIRECT = POS direct sale
+  discountType             String? // PERCENTAGE | FIXED — how the sale-level discount was entered
+  discountValue            Decimal    @default(0) // entered discount value (percent or Birr)
+  taxableAmount            Decimal? // VAT base after ALL discounts (null on legacy sales)
+  paidAmount               Decimal? // cash tendered (null when not recorded)
+  changeAmount             Decimal? // change given back (null when not recorded)
+  customer                 Customer?  @relation(fields: [customerId], references: [id])
+  location                 Location   @relation(fields: [locationId], references: [id])
+  items                    SaleItem[]
+
+  @@index([customerId])
+  @@index([locationId])
+  @@index([status])
+  @@index([soldAt])
+}
+
+model SaleItem {
+  id          String   @id @default(cuid())
+  saleId      String
+  productId   String
+  productName String
+  quantity    Float
+  unitPrice   Decimal
+  unitCost    Decimal  @default(0)
+  totalPrice  Decimal // CHARGED amount for the line (0 for free gifts)
+  size        String?
+  sizeMl      Int?
+  // --- Discount / Free Gift line info (additive — legacy rows keep defaults) ---
+  itemType         String    @default("NORMAL") // NORMAL | DISCOUNTED | FREE_GIFT
+  isFreeGift       Boolean   @default(false)
+  regularUnitPrice Decimal? // product's normal price — preserved for gifts/reporting
+  discountType     String? // PERCENTAGE | FIXED — how the line discount was entered
+  discountValue    Decimal   @default(0) // entered discount value (percent or Birr)
+  discountAmount   Decimal   @default(0) // Birr actually discounted on this line
+  createdAt        DateTime  @default(now())
+  product     Product  @relation(fields: [productId], references: [id])
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+@@map("saleitem")
+  @@index([saleId])
+  @@index([productId])
+}
+
+model BackupMetadata {
+  id                 String   @id @default(cuid())
+  backupId           String   @unique
+  timestamp          DateTime @default(now())
+  schemaVersion      String?
+  databaseSize       Int?
+  compressedSize     Int?
+  encryptedSize      Int?
+  sha256             String?
+  integrityStatus    String   @default("UNKNOWN")
+  verificationStatus String   @default("UNKNOWN")
+  status             String   @default("PENDING")
+  objectKey          String?
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  @@index([backupId])
+  @@index([status])
+  @@index([timestamp])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String?
+  type      String?
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+// Cache + audit trail for Ethiopian eTrade TIN verifications.
+// Positive results are reused for ETRADE_CACHE_TTL_HOURS, negative
+// ("not found") results for a shorter window so newly registered
+// businesses can be re-checked. Only government-returned name data is
+// stored - never the raw upstream payload (it contains base64 photos).
+model TinVerificationCache {
+  id             String   @id @default(cuid())
+  tin            String   @unique
+  verified       Boolean
+  name           String?
+  licenseNumber  String?
+  licenseValidTo String?
+  source         String   @default("ETRADE")
+  checkedAt      DateTime @default(now())
+  lookupCount    Int      @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([verified])
+  @@index([checkedAt])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String?
+  userId         String?
+  action         String
+  entity         String
+  entityId       String?
+  details        String?
+  ipAddress      String?
+  requestId      String?
+  beforeState    String?
+  afterState     String?
+  reason         String?
+  success        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  user           User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([entity])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityId])
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  userId         String?
+  organizationId String?
+  type           String
+  title          String
+  message        String?
+  severity       String    @default("INFO")
+  link           String?
+  entityType     String?
+  entityId       String?
+  reference      String?
+  isRead         Boolean   @default(false)
+  readAt         DateTime?
+  priority       String    @default("NORMAL")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User?     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([type])
+  @@index([isRead])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([severity])
+  @@index([entityType, entityId])
+}
+
+model IntelligenceRecommendation {
+  id          String    @id @default(cuid())
+  type        String
+  entityType  String?
+  entityId    String?
+  priority    String    @default("MEDIUM")
+  title       String
+  description String?
+  reason      String?
+  payload     String?
+  status      String    @default("OPEN")
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([priority])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model ScheduledJob {
+  id             String    @id @default(cuid())
+  name           String    @unique
+  schedule       String
+  status         String    @default("IDLE")
+  lastRunAt      DateTime?
+  lastStatus     String?
+  lastError      String?
+  lastDurationMs Int?
+  nextRunAt      DateTime?
+  runCount       Int       @default(0)
+  failCount      Int       @default(0)
+  enabled        Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([nextRunAt])
+}
+
+model ApprovalWorkflow {
+  id         String            @id @default(cuid())
+  name       String
+  entityType String
+  isActive   Boolean           @default(true)
+  config     String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  requests   ApprovalRequest[]
+  steps      ApprovalStep[]
+
+  @@index([entityType])
+  @@index([isActive])
+}
+
+model ApprovalStep {
+  id                   String           @id @default(cuid())
+  workflowId           String
+  order                Int
+  name                 String
+  assigneeRole         String?
+  assigneeUserId       String?
+  approvalType         String
+  required             Boolean          @default(true)
+  autoApproveThreshold String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  workflow             ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([assigneeRole])
+}
+
+model ApprovalRequest {
+  id             String           @id @default(cuid())
+  workflowId     String
+  entityType     String
+  entityId       String
+  status         String           @default("DRAFT")
+  requestedBy    String
+  requestedAt    DateTime         @default(now())
+  assignedTo     String?
+  approvedBy     String?
+  approvedAt     DateTime?
+  rejectedBy     String?
+  rejectedAt     DateTime?
+  cancelledBy    String?
+  cancelledAt    DateTime?
+  returnTo       String?
+  comments       String?
+  details        String?
+  expiresAt      DateTime?
+  organizationId String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  actions        ApprovalAction[]
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  workflow       ApprovalWorkflow @relation(fields: [workflowId], references: [id])
+
+  @@index([workflowId])
+  @@index([entityType, entityId])
+  @@index([status])
+  @@index([requestedBy])
+  @@index([assignedTo])
+  @@index([organizationId])
+}
+
+model ApprovalAction {
+  id          String          @id @default(cuid())
+  requestId   String
+  action      String
+  performedBy String
+  performedAt DateTime        @default(now())
+  comment     String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime        @default(now())
+  request     ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([performedBy])
+  @@index([action])
+}
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  name           String
+  keyHash        String       @unique
+  organizationId String
+  createdBy      String
+  expiresAt      DateTime?
+  lastUsedAt     DateTime?
+  isActive       Boolean      @default(true)
+  scopes         String       @default("[]")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  creator        User         @relation(fields: [createdBy], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([keyHash])
+  @@index([isActive])
+  @@index([expiresAt])
+}
+
+model WebhookEndpoint {
+  id             String            @id @default(cuid())
+  organizationId String
+  name           String
+  url            String
+  secret         String?
+  events         String            @default("[]")
+  isActive       Boolean           @default(true)
+  lastDeliveryAt DateTime?
+  lastError      String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deliveries     WebhookDelivery[]
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([url])
+  @@index([isActive])
+}
+
+model WebhookEvent {
+  id             String            @id @default(cuid())
+  organizationId String
+  eventType      String
+  entityType     String?
+  entityId       String?
+  payload        String
+  status         String            @default("PENDING")
+  attempts       Int               @default(0)
+  lastAttemptAt  DateTime?
+  lastError      String?
+  deliveredAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deliveries     WebhookDelivery[]
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([eventType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model WebhookDelivery {
+  id           String          @id @default(cuid())
+  endpointId   String
+  eventId      String
+  attempt      Int
+  status       String
+  responseCode Int?
+  responseBody String?
+  errorMessage String?
+  startedAt    DateTime        @default(now())
+  completedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  event        WebhookEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  endpoint     WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId])
+  @@index([eventId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model RetentionPolicy {
+  id             String       @id @default(cuid())
+  organizationId String
+  dataType       String
+  retentionDays  Int          @default(365)
+  enabled        Boolean      @default(true)
+  lastRunAt      DateTime?
+  lastResult     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([dataType])
+  @@index([enabled])
+}
+
+model OrganizationSetting {
+  id             String       @id @default(cuid())
+  organizationId String
+  key            String
+  value          String?
+  type           String?
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+}
+
+model ExportLog {
+  id             String       @id @default(cuid())
+  userId         String
+  exportType     String
+  organizationId String
+  locationId     String?
+  filters        String?
+  recordCount    Int
+  format         String
+  status         String       @default("COMPLETED")
+  error          String?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([exportType])
+  @@index([createdAt])
+}
+
+model BackgroundJob {
+  id             String    @id @default(cuid())
+  name           String
+  type           String
+  status         String    @default("PENDING")
+  priority       String    @default("NORMAL")
+  payload        String?
+  result         String?
+  error          String?
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  lastAttemptAt  DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  organizationId String?
+  userId         String?
+  scheduledAt    DateTime?
+  runAt          DateTime?
+  parentJobId    String?
+  isRecurring    Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([priority])
+  @@index([type])
+  @@index([organizationId])
+  @@index([runAt])
+  @@index([scheduledAt])
+  @@index([parentJobId])
+}
+
+model FiscalPeriod {
+  id        String         @id @default(cuid())
+  name      String         @unique(map: "sqlite_autoindex_FiscalPeriod_2")
+  startDate DateTime
+  endDate   DateTime
+  status    String         @default("OPEN")
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  entries   JournalEntry[]
+
+  @@index([startDate])
+  @@index([endDate])
+  @@index([status])
+}
+
+model Account {
+  id          String        @id @default(cuid())
+  code        String        @unique(map: "sqlite_autoindex_Account_2")
+  name        String
+  type        String
+  description String?
+  isActive    Boolean       @default(true)
+  parentId    String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  parent      Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children    Account[]     @relation("AccountHierarchy")
+  lines       JournalLine[]
+
+  @@index([type])
+  @@index([parentId])
+  @@index([isActive])
+}
+
+model JournalEntry {
+  id             String        @id @default(cuid())
+  entryNumber    String        @unique(map: "sqlite_autoindex_JournalEntry_2")
+  entryDate      DateTime
+  description    String
+  sourceType     String?
+  sourceId       String?
+  status         String        @default("POSTED")
+  fiscalPeriodId String?
+  postedBy       String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  fiscalPeriod   FiscalPeriod? @relation(fields: [fiscalPeriodId], references: [id])
+  lines          JournalLine[]
+
+  @@index([entryDate])
+  @@index([sourceType, sourceId])
+  @@index([status])
+  @@index([fiscalPeriodId])
+}
+
+model JournalLine {
+  id             String       @id @default(cuid())
+  journalEntryId String
+  accountId      String
+  debit          Decimal      @default(0)
+  credit         Decimal      @default(0)
+  memo           String?
+  account        Account      @relation(fields: [accountId], references: [id])
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  @@index([journalEntryId])
+  @@index([accountId])
+}
+
+// ============================================================
+// ITEMS MODULE — bottles, packaging and any business consumable.
+// Extensible ItemCategory + Item design; stock is always tracked
+// per Location (ItemInventory), never a single global quantity.
+// Every quantity change writes an ItemMovement (auditable).
+// ============================================================
+
+model ItemCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  items       Item[]
+
+  @@index([isActive])
+}
+
+model Item {
+  id              String   @id @default(cuid())
+  itemCode        String   @unique
+  name            String
+  description     String?
+  categoryId      String
+  brandName       String?
+  sku             String?
+  barcode         String?
+  size            String?
+  volume          Float?
+  volumeUnit      String?
+  unit            String?
+  color           String?
+  material        String?
+  shape           String?
+  neckSize        String?
+  dimensions      String?
+  packageType     String?
+  supplierId      String?
+  costPrice       Decimal  @default(0)
+  minimumStock    Decimal  @default(0)
+  reorderQuantity Decimal  @default(0)
+  imageUrl        String?
+  imageKey        String?
+  notes           String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  category       ItemCategory        @relation(fields: [categoryId], references: [id])
+  supplier       Supplier?           @relation(fields: [supplierId], references: [id])
+  inventories    ItemInventory[]
+  movements      ItemMovement[]
+  productItems   ProductItem[]
+  transferItems  ItemTransferItem[]
+  purchaseItems  PurchaseItem[]
+
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([name])
+  @@index([isActive])
+  @@index([barcode])
+}
+
+model ItemInventory {
+  id                String   @id @default(cuid())
+  itemId            String
+  locationId        String
+  quantity          Decimal  @default(0)
+  reservedQuantity  Decimal  @default(0)
+  availableQuantity Decimal  @default(0)
+  minimumStock      Decimal  @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  item              Item     @relation(fields: [itemId], references: [id])
+  location          Location @relation(fields: [locationId], references: [id])
+
+  @@unique([itemId, locationId])
+  @@index([itemId])
+  @@index([locationId])
+}
+
+model ItemMovement {
+  id                String   @id @default(cuid())
+  itemId            String
+  locationId        String
+  type              String
+  quantity          Decimal
+  referenceType     String?
+  referenceId       String?
+  reason            String?
+  notes             String?
+  userId            String?
+  previousQuantity  Decimal?
+  resultingQuantity Decimal?
+  createdAt         DateTime @default(now())
+  item              Item     @relation(fields: [itemId], references: [id])
+  location          Location @relation(fields: [locationId], references: [id])
+
+  @@index([itemId])
+  @@index([locationId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([referenceType, referenceId])
+}
+
+// Components consumed when a product is sold (bottle + box + bag per unit).
+// Optional per product — no rows means no consumption on sale.
+model ProductItem {
+  id         String   @id @default(cuid())
+  productId  String
+  itemId     String
+  quantity   Decimal  @default(1)
+  isRequired Boolean  @default(true)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  item       Item     @relation(fields: [itemId], references: [id])
+
+  @@unique([productId, itemId])
+  @@index([productId])
+  @@index([itemId])
+}
+
+model ItemTransfer {
+  id             String    @id @default(cuid())
+  transferNumber String    @unique
+  fromLocationId String
+  toLocationId   String
+  status         String    @default("PENDING")
+  notes          String?
+  createdBy      String?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  fromLocation   Location  @relation("ItemTransferFrom", fields: [fromLocationId], references: [id])
+  toLocation     Location  @relation("ItemTransferTo", fields: [toLocationId], references: [id])
+  items          ItemTransferItem[]
+
+  @@index([fromLocationId])
+  @@index([toLocationId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model PerfumeNoteGroup {
+  id          String   @id @default(cuid())
+  groupCode   String   @unique
+  groupName   String
+  description String?
+  sortOrder   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  // Relations
+  subGroups   PerfumeNoteSubGroup[]
+  notes       FragranceNote[]
+
+  @@index([groupCode])
+  @@index([sortOrder])
+}
+
+model PerfumeNoteSubGroup {
+  id           String   @id @default(cuid())
+  subGroupCode String   @unique
+  subGroupName String
+  groupId      String
+  description  String?
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  // Relations
+  group        PerfumeNoteGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  notes        FragranceNote[]
+
+  @@index([subGroupCode])
+  @@index([groupId])
+  @@index([sortOrder])
+}
+
+model ItemTransferItem {
+  id         String       @id @default(cuid())
+  transferId String
+  itemId     String
+  quantity   Decimal
+  transfer   ItemTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  item       Item         @relation(fields: [itemId], references: [id])
+
+  @@index([transferId])
+  @@index([itemId])
+}

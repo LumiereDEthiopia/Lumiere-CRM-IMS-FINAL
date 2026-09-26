@@ -1,0 +1,1027 @@
+{
+  "startedAt": "2026-09-17T09:40:09.414Z",
+  "tables": [
+    {
+      "model": "Permission",
+      "table": "Permission",
+      "sqliteRows": 48,
+      "pgRows": 48,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Role",
+      "table": "Role",
+      "sqliteRows": 13,
+      "pgRows": 13,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "User",
+      "table": "User",
+      "sqliteRows": 3,
+      "pgRows": 3,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Organization",
+      "table": "Organization",
+      "sqliteRows": 1,
+      "pgRows": 1,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "OrganizationUser",
+      "table": "OrganizationUser",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Brand",
+      "table": "Brand",
+      "sqliteRows": 51,
+      "pgRows": 51,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Category",
+      "table": "Category",
+      "sqliteRows": 8,
+      "pgRows": 8,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Product",
+      "table": "Product",
+      "sqliteRows": 87,
+      "pgRows": 87,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ProductImage",
+      "table": "ProductImage",
+      "sqliteRows": 2,
+      "pgRows": 1,
+      "diff": -1,
+      "ok": true
+    },
+    {
+      "model": "Accord",
+      "table": "Accord",
+      "sqliteRows": 51,
+      "pgRows": 51,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ProductAccord",
+      "table": "ProductAccord",
+      "sqliteRows": 380,
+      "pgRows": 380,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "FragranceNote",
+      "table": "FragranceNote",
+      "sqliteRows": 408,
+      "pgRows": 408,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ProductNote",
+      "table": "ProductNote",
+      "sqliteRows": 716,
+      "pgRows": 716,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Customer",
+      "table": "Customer",
+      "sqliteRows": 18,
+      "pgRows": 18,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Location",
+      "table": "Location",
+      "sqliteRows": 10,
+      "pgRows": 10,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Department",
+      "table": "Department",
+      "sqliteRows": 4,
+      "pgRows": 4,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Employee",
+      "table": "Employee",
+      "sqliteRows": 7,
+      "pgRows": 7,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "EmployeeSalaryHistory",
+      "table": "EmployeeSalaryHistory",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "EmployeeSalaryPayment",
+      "table": "EmployeeSalaryPayment",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "PayrollRule",
+      "table": "PayrollRule",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "EmployeeDocument",
+      "table": "EmployeeDocument",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Inventory",
+      "table": "Inventory",
+      "sqliteRows": 88,
+      "pgRows": 88,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "StockMovement",
+      "table": "StockMovement",
+      "sqliteRows": 115,
+      "pgRows": 115,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "StockTransfer",
+      "table": "StockTransfer",
+      "sqliteRows": 2,
+      "pgRows": 2,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "StockTransferItem",
+      "table": "StockTransferItem",
+      "sqliteRows": 2,
+      "pgRows": 2,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Supplier",
+      "table": "Supplier",
+      "sqliteRows": 4,
+      "pgRows": 4,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "SupplierProduct",
+      "table": "SupplierProduct",
+      "sqliteRows": 8,
+      "pgRows": 8,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Purchase",
+      "table": "Purchase",
+      "sqliteRows": 3,
+      "pgRows": 3,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "PurchaseItem",
+      "table": "PurchaseItem",
+      "sqliteRows": 5,
+      "pgRows": 5,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "CustomerInteraction",
+      "table": "CustomerInteraction",
+      "sqliteRows": 4,
+      "pgRows": 4,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "CustomerTask",
+      "table": "CustomerTask",
+      "sqliteRows": 6,
+      "pgRows": 6,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "CustomerTag",
+      "table": "CustomerTag",
+      "sqliteRows": 1,
+      "pgRows": 1,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Sale",
+      "table": "Sale",
+      "sqliteRows": 67,
+      "pgRows": 67,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "SaleItem",
+      "table": "SaleItem",
+      "sqliteRows": 104,
+      "pgRows": 104,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "BackupMetadata",
+      "table": "BackupMetadata",
+      "sqliteRows": 2,
+      "pgRows": 2,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Setting",
+      "table": "Setting",
+      "sqliteRows": 33,
+      "pgRows": 33,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "TinVerificationCache",
+      "table": "TinVerificationCache",
+      "sqliteRows": 36,
+      "pgRows": 36,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "AuditLog",
+      "table": "AuditLog",
+      "sqliteRows": 424,
+      "pgRows": 424,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Notification",
+      "table": "Notification",
+      "sqliteRows": 233,
+      "pgRows": 233,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "IntelligenceRecommendation",
+      "table": "IntelligenceRecommendation",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ScheduledJob",
+      "table": "ScheduledJob",
+      "sqliteRows": 9,
+      "pgRows": 9,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ApprovalWorkflow",
+      "table": "ApprovalWorkflow",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ApprovalStep",
+      "table": "ApprovalStep",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ApprovalRequest",
+      "table": "ApprovalRequest",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ApprovalAction",
+      "table": "ApprovalAction",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ApiKey",
+      "table": "ApiKey",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "WebhookEndpoint",
+      "table": "WebhookEndpoint",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "WebhookEvent",
+      "table": "WebhookEvent",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "WebhookDelivery",
+      "table": "WebhookDelivery",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "RetentionPolicy",
+      "table": "RetentionPolicy",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "OrganizationSetting",
+      "table": "OrganizationSetting",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ExportLog",
+      "table": "ExportLog",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "BackgroundJob",
+      "table": "BackgroundJob",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "FiscalPeriod",
+      "table": "FiscalPeriod",
+      "sqliteRows": 1,
+      "pgRows": 1,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Account",
+      "table": "Account",
+      "sqliteRows": 12,
+      "pgRows": 12,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "JournalEntry",
+      "table": "JournalEntry",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "JournalLine",
+      "table": "JournalLine",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ItemCategory",
+      "table": "ItemCategory",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "Item",
+      "table": "Item",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ItemInventory",
+      "table": "ItemInventory",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ItemMovement",
+      "table": "ItemMovement",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ProductItem",
+      "table": "ProductItem",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ItemTransfer",
+      "table": "ItemTransfer",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "model": "ItemTransferItem",
+      "table": "ItemTransferItem",
+      "sqliteRows": 0,
+      "pgRows": 0,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "table": "_PermissionToRole",
+      "sqliteRows": 215,
+      "pgRows": 215,
+      "diff": 0,
+      "ok": true
+    },
+    {
+      "table": "_CustomerToCustomerTag",
+      "sqliteRows": 1,
+      "pgRows": 1,
+      "diff": 0,
+      "ok": true
+    }
+  ],
+  "fkChecks": [
+    {
+      "name": "User_roleId_fkey",
+      "child": "\"User\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "OrganizationUser_roleId_fkey",
+      "child": "\"OrganizationUser\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "OrganizationUser_userId_fkey",
+      "child": "\"OrganizationUser\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "OrganizationUser_organizationId_fkey",
+      "child": "\"OrganizationUser\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Category_parentId_fkey",
+      "child": "\"Category\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Product_categoryId_fkey",
+      "child": "\"Product\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Product_brandId_fkey",
+      "child": "\"Product\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ProductImage_productId_fkey",
+      "child": "\"ProductImage\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ProductAccord_accordId_fkey",
+      "child": "\"ProductAccord\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ProductAccord_productId_fkey",
+      "child": "\"ProductAccord\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ProductNote_fragranceNoteId_fkey",
+      "child": "\"ProductNote\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ProductNote_productId_fkey",
+      "child": "\"ProductNote\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Customer_locationId_fkey",
+      "child": "\"Customer\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Location_managerId_fkey",
+      "child": "\"Location\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Location_organizationId_fkey",
+      "child": "\"Location\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Employee_departmentId_fkey",
+      "child": "\"Employee\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Employee_locationId_fkey",
+      "child": "\"Employee\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Employee_managerId_fkey",
+      "child": "\"Employee\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Employee_userId_fkey",
+      "child": "\"Employee\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "EmployeeSalaryHistory_employeeId_fkey",
+      "child": "\"EmployeeSalaryHistory\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "EmployeeSalaryHistory_createdById_fkey",
+      "child": "\"EmployeeSalaryHistory\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "EmployeeSalaryPayment_employeeId_fkey",
+      "child": "\"EmployeeSalaryPayment\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "EmployeeSalaryPayment_processedById_fkey",
+      "child": "\"EmployeeSalaryPayment\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "EmployeeDocument_employeeId_fkey",
+      "child": "\"EmployeeDocument\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Inventory_locationId_fkey",
+      "child": "\"Inventory\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Inventory_productId_fkey",
+      "child": "\"Inventory\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "StockMovement_productId_fkey",
+      "child": "\"StockMovement\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "StockTransfer_toLocationId_fkey",
+      "child": "\"StockTransfer\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "StockTransfer_fromLocationId_fkey",
+      "child": "\"StockTransfer\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "StockTransferItem_transferId_fkey",
+      "child": "\"StockTransferItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "SupplierProduct_supplierId_fkey",
+      "child": "\"SupplierProduct\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Purchase_locationId_fkey",
+      "child": "\"Purchase\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Purchase_supplierId_fkey",
+      "child": "\"Purchase\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "PurchaseItem_productId_fkey",
+      "child": "\"PurchaseItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "PurchaseItem_itemId_fkey",
+      "child": "\"PurchaseItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "PurchaseItem_purchaseId_fkey",
+      "child": "\"PurchaseItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "CustomerInteraction_customerId_fkey",
+      "child": "\"CustomerInteraction\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "CustomerTask_customerId_fkey",
+      "child": "\"CustomerTask\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Sale_customerId_fkey",
+      "child": "\"Sale\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Sale_locationId_fkey",
+      "child": "\"Sale\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "SaleItem_productId_fkey",
+      "child": "\"SaleItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "SaleItem_saleId_fkey",
+      "child": "\"SaleItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "AuditLog_userId_fkey",
+      "child": "\"AuditLog\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Notification_userId_fkey",
+      "child": "\"Notification\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ApprovalStep_workflowId_fkey",
+      "child": "\"ApprovalStep\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ApprovalRequest_organizationId_fkey",
+      "child": "\"ApprovalRequest\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ApprovalRequest_workflowId_fkey",
+      "child": "\"ApprovalRequest\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ApprovalAction_requestId_fkey",
+      "child": "\"ApprovalAction\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ApiKey_createdBy_fkey",
+      "child": "\"ApiKey\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ApiKey_organizationId_fkey",
+      "child": "\"ApiKey\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "WebhookEndpoint_organizationId_fkey",
+      "child": "\"WebhookEndpoint\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "WebhookEvent_organizationId_fkey",
+      "child": "\"WebhookEvent\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "WebhookDelivery_eventId_fkey",
+      "child": "\"WebhookDelivery\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "WebhookDelivery_endpointId_fkey",
+      "child": "\"WebhookDelivery\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "RetentionPolicy_organizationId_fkey",
+      "child": "\"RetentionPolicy\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "OrganizationSetting_organizationId_fkey",
+      "child": "\"OrganizationSetting\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ExportLog_organizationId_fkey",
+      "child": "\"ExportLog\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ExportLog_userId_fkey",
+      "child": "\"ExportLog\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Account_parentId_fkey",
+      "child": "\"Account\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "JournalEntry_fiscalPeriodId_fkey",
+      "child": "\"JournalEntry\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "JournalLine_accountId_fkey",
+      "child": "\"JournalLine\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "JournalLine_journalEntryId_fkey",
+      "child": "\"JournalLine\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Item_categoryId_fkey",
+      "child": "\"Item\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "Item_supplierId_fkey",
+      "child": "\"Item\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ItemInventory_itemId_fkey",
+      "child": "\"ItemInventory\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ItemInventory_locationId_fkey",
+      "child": "\"ItemInventory\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ItemMovement_itemId_fkey",
+      "child": "\"ItemMovement\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ItemMovement_locationId_fkey",
+      "child": "\"ItemMovement\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ProductItem_productId_fkey",
+      "child": "\"ProductItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ProductItem_itemId_fkey",
+      "child": "\"ProductItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ItemTransfer_fromLocationId_fkey",
+      "child": "\"ItemTransfer\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ItemTransfer_toLocationId_fkey",
+      "child": "\"ItemTransfer\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ItemTransferItem_transferId_fkey",
+      "child": "\"ItemTransferItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "ItemTransferItem_itemId_fkey",
+      "child": "\"ItemTransferItem\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "_PermissionToRole_A_fkey",
+      "child": "\"_PermissionToRole\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "_PermissionToRole_B_fkey",
+      "child": "\"_PermissionToRole\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "_CustomerToCustomerTag_A_fkey",
+      "child": "\"_CustomerToCustomerTag\"",
+      "orphans": 0,
+      "ok": true
+    },
+    {
+      "name": "_CustomerToCustomerTag_B_fkey",
+      "child": "\"_CustomerToCustomerTag\"",
+      "orphans": 0,
+      "ok": true
+    }
+  ],
+  "remapChecks": {
+    "SaleItem": {
+      "oldIdRefs": 0,
+      "newIdRefs": 12
+    },
+    "StockMovement": {
+      "oldIdRefs": 0,
+      "newIdRefs": 13
+    },
+    "PurchaseItem": {
+      "oldIdRefs": 0,
+      "newIdRefs": 1
+    },
+    "SupplierProduct": {
+      "oldIdRefs": 0,
+      "newIdRefs": 2
+    },
+    "ProductImage": {
+      "oldIdRefs": 0,
+      "newIdRefs": 1
+    },
+    "excludedImageAbsentInPg": true
+  },
+  "spotChecks": {},
+  "sqliteSource": {},
+  "status": "ERROR: \nInvalid `prisma.product.findUnique()` invocation:\n\n{\n  where: {\n    id: \"cmu02u5g0001enyqmgwzrlch2\"\n  },\n  select: {\n    id: true,\n    name: true,\n    slug: true,\n    sku: true,\n    price: true,\n    _count: {\n      select: {\n        saleItems: true,\n        stockMovements: true,\n        images: true,\n        supplierProducts: true,\n        ~~~~~~~~~~~~~~~~\n?       inventory?: true,\n?       accords?: true,\n?       notes?: true,\n?       purchaseItems?: true,\n?       productItems?: true\n      }\n    }\n  }\n}\n\nUnknown field `supplierProducts` for select statement on model `ProductCountOutputType`. Available options are marked with ?."
+}
