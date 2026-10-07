@@ -73,7 +73,7 @@ export default function Receipt({ data }) {
           {data.customerTinVerified && data.customerTinName && <span>Verified name: {data.customerTinName}</span>}
           {data.customer?.address && <span>{data.customer.address}</span>}
         </div>
-        <div><h3>Store Details</h3><strong>{data.location?.name || businessName}</strong><span>Served by: {data.createdBy || '-'}</span><span>Currency: {currencyCode}</span>{businessPhone && <span>Phone: {businessPhone}</span>}{businessAddress && <span>Address: {businessAddress}</span>}{businessTin && <span>TIN: {businessTin}</span>}</div>
+        <div><h3>Store Details</h3><strong>{data.location?.name || businessName}</strong><span>Sold By: {data.soldByEmployee?.firstName} {data.soldByEmployee?.lastName || data.createdBy || '-'}</span><span>Currency: {currencyCode}</span>{businessPhone && <span>Phone: {businessPhone}</span>}{businessAddress && <span>Address: {businessAddress}</span>}{businessTin && <span>TIN: {businessTin}</span>}</div>
       </section>
 
       <section className="receipt-section">
@@ -84,11 +84,25 @@ export default function Receipt({ data }) {
           const isGift = !!item.isFreeGift
           const lineDiscount = Number(item.discountAmount || 0)
           const shownUnitPrice = item.regularUnitPrice ?? item.unitPrice
+          const product = item.product || {}
+          const productType = product.productType
+          // Show extra details for Musk and Cream/Jelly
+          const extraDetails = []
+          if (productType === 'MUSK' && product.flavor) {
+            extraDetails.push(`Flavor: ${product.flavor}`)
+          }
+          if (productType === 'MUSK') {
+            extraDetails.push('3 ml')
+          }
+          if (productType === 'CREAM') {
+            extraDetails.push(`${product.form || ''} · ${product.size || ''}`)
+          }
           return (
             <tr key={item.id || index} style={isGift ? { background: '#F3E5F5' } : undefined}>
               <td>{item.product?.sku || '-'}</td>
               <td>
                 {item.productName || '-'}
+                {extraDetails.length > 0 && <><br /><small style={{ color: '#666' }}>{extraDetails.join(' · ')}</small></>}
                 {isGift && <><br /><strong style={{ color: '#6A1B9A' }}>FREE GIFT</strong></>}
                 {!isGift && lineDiscount > 0 && <><br /><small style={{ color: '#C62828' }}>Discount -{etb(lineDiscount)}</small></>}
               </td>

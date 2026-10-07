@@ -12,11 +12,16 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
     brandId: '', categoryId: '', gender: '', productType: 'PERFUME', price: '', price100ml: '', compareAtPrice: '',
     stockQuantity: '', stock50ml: '', stock100ml: '', sku: '', size: '', concentration: '',
     year: '', country: '', isActive: true, isFeatured: false,
-    isNew: false, isLuxury: false
+    isNew: false, isLuxury: false,
+    // Musk & Cream/Jelly fields
+    flavor: '', form: '', pureOilProductId: '', pureOilProductName: '', pureOilStock: ''
   }
   const [form, setForm] = useState(initialData || emptyForm)
   const [brands, setBrands] = useState([])
   const [categories, setCategories] = useState([])
+  const [pureOils, setPureOils] = useState([])
+  const [showPureOilPicker, setShowPureOilPicker] = useState(false)
+  const [pureOilSearch, setPureOilSearch] = useState('')
 
   // "Inventory Items Used" — components consumed when this product is sold
   const [itemsUsed, setItemsUsed] = useState(
@@ -36,6 +41,7 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
   const [itemSearch, setItemSearch] = useState('')
   const [itemResults, setItemResults] = useState([])
   const itemTimer = useRef(null)
+  const pureOilTimer = useRef(null)
 
   useEffect(() => {
     clearTimeout(itemTimer.current)
@@ -47,6 +53,18 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
     }, 300)
     return () => clearTimeout(itemTimer.current)
   }, [itemSearch, showPicker])
+
+  // Pure Oil search for Cream/Jelly products
+  useEffect(() => {
+    clearTimeout(pureOilTimer.current)
+    if (!showPureOilPicker) return
+    pureOilTimer.current = setTimeout(() => {
+      const params = new URLSearchParams({ limit: 20, productType: 'PURE_OIL', isActive: 'true' })
+      if (pureOilSearch.trim()) params.set('search', pureOilSearch.trim())
+      api.get(`/api/products?${params.toString()}`).then((r) => setPureOils(r.data || [])).catch(() => {})
+    }, 300)
+    return () => clearTimeout(pureOilTimer.current)
+  }, [pureOilSearch, showPureOilPicker])
 
   const addItemUsed = (item) => {
     if (itemsUsed.some((i) => i.itemId === item.id)) return
@@ -61,6 +79,17 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
   const setItemUsedQty = (itemId, qty) => setItemsUsed((prev) => prev.map((i) => (i.itemId === itemId ? { ...i, quantity: qty } : i)))
   const setItemUsedRequired = (itemId, required) => setItemsUsed((prev) => prev.map((i) => (i.itemId === itemId ? { ...i, isRequired: required } : i)))
 
+  const selectPureOil = (oil) => {
+    setForm((prev) => ({
+      ...prev,
+      pureOilProductId: oil.id,
+      pureOilProductName: oil.name,
+      pureOilStock: oil.stockQuantity || 0
+    }))
+    setShowPureOilPicker(false)
+    setPureOilSearch('')
+  }
+
   useEffect(() => {
     api.get('/api/brands?limit=100').then((r) => setBrands(r.data)).catch(() => {})
     api.get('/api/categories?flat=true').then((r) => setCategories(r.data)).catch(() => {})
@@ -70,6 +99,8 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
 
   const isGram = form.productType === 'OIL' || form.productType === 'PURE_OIL'
   const isPerfume = form.productType === 'PERFUME'
+  const isMusk = form.productType === 'MUSK'
+  const isCream = form.productType === 'CREAM'
 
   // Bottle size checkboxes for perfumes — none checked = sold in both sizes (picked at sale time)
   const sizeHas50 = /50ml/i.test(form.size || '')
@@ -97,6 +128,15 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
       payload.stock50ml = num(form.stock50ml)
       payload.stock100ml = num(form.stock100ml)
       payload.stockQuantity = totalBottles
+    }
+    // Musk: volume is always 3 ml, enforced in backend
+    if (isMusk) {
+      payload.size = '3 ml'
+    }
+    // Cream/Jelly: validate Pure Oil link
+    if (isCream && !form.pureOilProductId) {
+      alert('Please select a Pure Oil product for Cream/Jelly products')
+      return
     }
     payload.productItems = itemsUsed
       .filter((i) => i.itemId && parseFloat(i.quantity) > 0)
@@ -144,8 +184,50 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
             <option value="PURE_OIL">Pure Oil — sold by gram</option>
             <option value="OIL">Oil — sold by gram</option>
             <option value="PERFUME">Perfume — 50ml &amp; 100ml bottles</option>
+            <option value="MUSK">Musk — 3 ml units</option>
+            <option value="CREAM">Cream/Jelly — 30ml &amp; 50ml</option>
           </select>
         </div>
+        {isMusk && (
+          <Field label="Flavor *" value={form.flavor} onChange={(v) => set('flavor', v)} placeholder="e.g. Oud Rose" />
+        )}
+        {isCream && (
+          <>
+            <div className="form-field">
+              <label>Form *</label>
+              <select value={form.form || ''} onChange={(e) => set('form', e.target.value)}>
+                <option value="">Select...</option>
+                <option value="CREAM">Cream</option>
+                <option value="JELLY">Jelly</option>
+              </select>
+            </div>
+            <div className="form-field">
+              <label>Size *</label>
+              <select value={form.size || ''} onChange={(e) => set('size', e.target.value)}>
+                <option value="">Select...</option>
+                <option value="30 ml">30 ml</option>
+                <option value="50 ml">50 ml</option>
+              </select>
+            </div>
+            <div className="form-field">
+              <label>Pure Oil *</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  value={form.pureOilProductName || ''}
+                  readOnly
+                  placeholder="Select a Pure Oil product"
+                  style={{ flex: 1, padding: '0.45rem', border: '1px solid #ddd', borderRadius: 6, background: '#f7f7f9' }}
+                />
+                <button type="button" className="btn-secondary" onClick={() => { setShowPureOilPicker(true); setPureOilSearch('') }}>Select</button>
+              </div>
+              {form.pureOilProductId && (
+                <p style={{ margin: '0.25rem 0 0', fontSize: '0.7rem', color: '#6b7280' }}>
+                  Stock: {Number(form.pureOilStock).toLocaleString()} g · Consumption: {form.size === '50 ml' ? '6 ml per unit' : '4 ml per unit'}
+                </p>
+              )}
+            </div>
+          </>
+        )}
         {isPerfume ? (
           <div className="form-field">
             <label>Bottle Size (ml)</label>
@@ -233,6 +315,25 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
                   <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{item.name} <span style={{ color: '#9a9a9a', fontWeight: 400 }}>({item.itemCode})</span></div>
                   <div style={{ fontSize: '0.68rem', color: '#9a9a9a' }}>
                     {item.category?.name || '—'}{item.size ? ` · ${item.size}` : ''}{item.color ? ` · ${item.color}` : ''} · Stock: {Number(item.totalQuantity ?? 0).toLocaleString()}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {showPureOilPicker && (
+          <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: '0.75rem', marginTop: '0.5rem', background: '#fafafa' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <input autoFocus value={pureOilSearch} onChange={(e) => setPureOilSearch(e.target.value)} placeholder="Search Pure Oil by name or code..." style={{ flex: 1, padding: '0.45rem', border: '1px solid #ddd', borderRadius: 6 }} />
+              <button type="button" className="btn-cancel" onClick={() => setShowPureOilPicker(false)}>Close</button>
+            </div>
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {pureOils.length === 0 && <p style={{ margin: 0, fontSize: '0.8rem', color: '#9a9a9a' }}>No Pure Oil products found{pureOilSearch ? '' : ' — type to search'}</p>}
+              {pureOils.map((oil) => (
+                <button type="button" key={oil.id} onClick={() => selectPureOil(oil)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem', background: 'none', border: 'none', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{oil.name} <span style={{ color: '#9a9a9a', fontWeight: 400 }}>({oil.sku})</span></div>
+                  <div style={{ fontSize: '0.68rem', color: '#9a9a9a' }}>
+                    Stock: {Number(oil.stockQuantity || 0).toLocaleString()} g
                   </div>
                 </button>
               ))}

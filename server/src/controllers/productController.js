@@ -159,11 +159,44 @@ export async function createProduct(req, res, next) {
       concentration, year, country,
       isActive = true, isFeatured = false,
       isNew = false, isLuxury = false,
-      images = [], accords = [], notes = []
+      images = [], accords = [], notes = [],
+      // Musk & Cream/Jelly fields
+      flavor, form, pureOilProductId
     } = normalized
 
     if (!name || !slug || !brandId) {
       throw new ApiError(400, 'Name, slug, and brandId are required')
+    }
+
+    // Musk validation: flavor required, volume always 3 ml
+    if (productType === 'MUSK') {
+      if (!flavor || flavor.trim() === '') {
+        throw new ApiError(400, 'Flavor is required for Musk products')
+      }
+    }
+
+    // Cream/Jelly validation: form, size, and Pure Oil link required
+    if (productType === 'CREAM') {
+      if (!form || (form !== 'CREAM' && form !== 'JELLY')) {
+        throw new ApiError(400, 'Form must be CREAM or JELLY for Cream/Jelly products')
+      }
+      if (!size || (size !== '30 ml' && size !== '50 ml')) {
+        throw new ApiError(400, 'Size must be 30 ml or 50 ml for Cream/Jelly products')
+      }
+      if (!pureOilProductId) {
+        throw new ApiError(400, 'Please select a Pure Oil product for Cream/Jelly products')
+      }
+      // Validate the Pure Oil product exists and is actually PURE_OIL type
+      const pureOil = await prisma.product.findUnique({
+        where: { id: pureOilProductId },
+        select: { id: true, productType: true, stockQuantity: true }
+      })
+      if (!pureOil) {
+        throw new ApiError(400, 'Selected Pure Oil product not found')
+      }
+      if (pureOil.productType !== 'PURE_OIL') {
+        throw new ApiError(400, 'Selected product is not a valid Pure Oil product')
+      }
     }
 
     // Auto-uniquify the slug so the same perfume can be entered twice —
@@ -206,6 +239,10 @@ export async function createProduct(req, res, next) {
         isFeatured: isFeatured ?? false,
         isNew: isNew ?? false,
         isLuxury: isLuxury ?? false,
+        // Musk & Cream/Jelly fields
+        flavor: flavor === '' ? null : flavor,
+        form: form === '' ? null : form,
+        pureOilProductId: pureOilProductId === '' ? null : pureOilProductId,
         images: images?.length ? {
           create: images.map((img, i) => ({
             imageUrl: img.imageUrl, objectKey: img.objectKey,
@@ -266,6 +303,43 @@ export async function updateProduct(req, res, next) {
       }
     }
 
+    // Musk validation: flavor required
+    const nextProductType = body.productType !== undefined ? body.productType : existing.productType
+    if (nextProductType === 'MUSK') {
+      const nextFlavor = body.flavor !== undefined ? body.flavor : existing.flavor
+      if (!nextFlavor || nextFlavor.trim() === '') {
+        throw new ApiError(400, 'Flavor is required for Musk products')
+      }
+    }
+
+    // Cream/Jelly validation: form, size, and Pure Oil link required
+    if (nextProductType === 'CREAM') {
+      const nextForm = body.form !== undefined ? body.form : existing.form
+      const nextSize = body.size !== undefined ? body.size : existing.size
+      const nextPureOilId = body.pureOilProductId !== undefined ? body.pureOilProductId : existing.pureOilProductId
+
+      if (!nextForm || (nextForm !== 'CREAM' && nextForm !== 'JELLY')) {
+        throw new ApiError(400, 'Form must be CREAM or JELLY for Cream/Jelly products')
+      }
+      if (!nextSize || (nextSize !== '30 ml' && nextSize !== '50 ml')) {
+        throw new ApiError(400, 'Size must be 30 ml or 50 ml for Cream/Jelly products')
+      }
+      if (!nextPureOilId) {
+        throw new ApiError(400, 'Please select a Pure Oil product for Cream/Jelly products')
+      }
+      // Validate the Pure Oil product exists and is actually PURE_OIL type
+      const pureOil = await prisma.product.findUnique({
+        where: { id: nextPureOilId },
+        select: { id: true, productType: true, stockQuantity: true }
+      })
+      if (!pureOil) {
+        throw new ApiError(400, 'Selected Pure Oil product not found')
+      }
+      if (pureOil.productType !== 'PURE_OIL') {
+        throw new ApiError(400, 'Selected product is not a valid Pure Oil product')
+      }
+    }
+
     // Stock boxes: the per-size values are the source of truth and the total
     // ("Stock (bottles)") is recomputed from them. A payload that only sends
     // `stockQuantity` keeps working — it lands in the box for the product size.
@@ -309,7 +383,11 @@ export async function updateProduct(req, res, next) {
         ...(normalized.isActive !== undefined && { isActive: normalized.isActive }),
         ...(normalized.isFeatured !== undefined && { isFeatured: normalized.isFeatured }),
         ...(normalized.isNew !== undefined && { isNew: normalized.isNew }),
-        ...(normalized.isLuxury !== undefined && { isLuxury: normalized.isLuxury })
+        ...(normalized.isLuxury !== undefined && { isLuxury: normalized.isLuxury }),
+        // Musk & Cream/Jelly fields
+        ...(normalized.flavor !== undefined && { flavor: normalized.flavor === '' ? null : normalized.flavor }),
+        ...(normalized.form !== undefined && { form: normalized.form === '' ? null : normalized.form }),
+        ...(normalized.pureOilProductId !== undefined && { pureOilProductId: normalized.pureOilProductId === '' ? null : normalized.pureOilProductId })
       },
       include: {
         brand: { select: { id: true, name: true } },

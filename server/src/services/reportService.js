@@ -271,7 +271,7 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
   const itemWhere = { sale: where }
   if (productFilter) itemWhere.product = productFilter
 
-  const [byProduct, byBrand, byCategory, unitsSold] = await Promise.all([
+  const [byProduct, byBrand, byCategory, unitsSold, byProductType, byEmployee, creamConsumption] = await Promise.all([
   prisma.saleItem.groupBy({
     by: ['productId', 'productName'],
     where: itemWhere,
@@ -321,6 +321,49 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
   prisma.saleItem.aggregate({
     where: itemWhere,
     _sum: { quantity: true }
+  }),
+
+  // Sales by product type (including Musk and Cream/Jelly)
+  prisma.$queryRawUnsafe(`
+    SELECT
+      p."productType",
+      p.form,
+      SUM(CAST(si.quantity AS NUMERIC)) AS units,
+      SUM(CAST(si."totalPrice" AS NUMERIC)) AS revenue
+    FROM "saleitem" si
+    JOIN "product" p ON si."productId" = p.id
+    JOIN "Sale" s ON si."saleId" = s.id
+    WHERE s.status != 'CANCELLED'
+    ${startDate ? `AND s."soldAt" >= '${new Date(startDate).toISOString()}'::timestamptz` : ''}
+    ${endDate ? `AND s."soldAt" <= '${new Date(endDate).toISOString()}'::timestamptz` : ''}
+    GROUP BY p."productType", p.form
+    ORDER BY revenue DESC
+  `),
+
+  // Sales by employee (Sold By)
+  prisma.sale.groupBy({
+    by: ['soldByEmployeeId'],
+    where,
+    _sum: { total: true, discount: true },
+    _count: true
+  }),
+
+  // Pure Oil consumption from Cream/Jelly sales
+  const creamWhere = { type: 'CREAM_CONSUMPTION' }
+  if (startDate || endDate) {
+    creamWhere.createdAt = {}
+    if (startDate) creamWhere.createdAt.gte = new Date(startDate)
+    if (endDate) creamWhere.createdAt.lte = new Date(endDate + 'T23:59:59')
+  }
+  const creamConsumption = await prisma.stockMovement.findMany({
+    where: creamWhere,
+    select: {
+      productId: true,
+      quantity: true,
+      notes: true,
+      createdAt: true,
+      referenceId: true
+    }
   })
 ])
 
@@ -343,6 +386,10 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
   const locMap = Object.fromEntries(locations.map((l) => [l.id, l.name]))
   const users = await prisma.user.findMany({ select: { id: true, name: true } })
   const userMap = Object.fromEntries(users.map((u) => [u.id, u.name]))
+  const employees = await prisma.employee.findMany({ select: { id: true, firstName: true, lastName: true } })
+  const employeeMap = Object.fromEntries(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`]))
+  const products = await prisma.product.findMany({ select: { id: true, name: true } })
+  const productMap = Object.fromEntries(products.map((p) => [p.id, p.name]))
 
   return {
     summary: {
@@ -386,6 +433,27 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
     byBrand: (byBrand || []).map((b) => ({ brandId: b.brandId, name: b.name, units: Number(b.units || 0), revenue: Number(b.revenue || 0) })),
     byCategory: (byCategory || []).map((c) => ({ categoryId: c.categoryId, name: c.name || 'Uncategorized', units: Number(c.units || 0), revenue: Number(c.revenue || 0) })),
     byLocation: byLocation.map((l) => ({ locationId: l.locationId, name: locMap[l.locationId] || l.locationId, total: Number(l._sum.total || 0), count: l._count })),
+    byProductType: (byProductType || []).map((pt) => ({
+      productType: pt.productType,
+      form: pt.form,
+      units: Number(pt.units || 0),
+      revenue: Number(pt.revenue || 0)
+    })),
+    byEmployee: byEmployee.map((e) => ({
+      employeeId: e.soldByEmployeeId,
+      name: e.soldByEmployeeId ? employeeMap[e.soldByEmployeeId] || 'Unassigned' : 'Unassigned',
+      total: Number(e._sum.total || 0),
+      discount: Number(e._sum.discount || 0),
+      transactions: e._count
+    })),
+    creamConsumption: creamConsumption.map((cm) => ({
+      productId: cm.productId,
+      productName: productMap[cm.productId] || 'Unknown',
+      quantity: Number(cm.quantity || 0),
+      notes: cm.notes,
+      saleId: cm.referenceId,
+      createdAt: cm.createdAt
+    })),
     recentSales
   }
 }

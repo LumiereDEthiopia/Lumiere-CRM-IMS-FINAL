@@ -12,12 +12,14 @@ import './admin-styles.css'
 // Held sale ("SAVE DRAFT") lives ONLY on this device — never in the database.
 const POS_DRAFT_KEY = 'lumier_pos_draft_v1'
 
-// Product sections — same 3 categories as the Products page header
+// Product sections — expanded to include Musk and Cream/Jelly
 const SALE_SECTIONS = [
   { key: 'ALL', title: 'All' },
   { key: 'PURE_OIL', title: 'Pure Oil', sub: 'per gram' },
   { key: 'OIL', title: 'Oil', sub: 'per gram' },
   { key: 'PERFUME', title: 'Perfume', sub: '50/100ml' },
+  { key: 'MUSK', title: 'Musk', sub: '3 ml' },
+  { key: 'CREAM', title: 'Cream/Jelly', sub: '30/50ml' },
 ]
 
 export default function NewSalePage() {
@@ -25,9 +27,11 @@ export default function NewSalePage() {
   const [customers, setCustomers] = useState([])
   const [products, setProducts] = useState([])
   const [locations, setLocations] = useState([])
+  const [employees, setEmployees] = useState([])
   const [cart, setCart] = useState([])
   const [selectedCustomer, setSelectedCustomer] = useState('')
   const [selectedLocation, setSelectedLocation] = useState('')
+  const [soldByEmployeeId, setSoldByEmployeeId] = useState('')
   const [discount, setDiscount] = useState(0)
   // Sale-level discount is entered as % or fixed Birr (backend re-validates).
   const [discountType, setDiscountType] = useState('FIXED')
@@ -99,12 +103,13 @@ export default function NewSalePage() {
 
   const loadData = async () => {
     try {
-      const [c, p, l] = await Promise.all([
+      const [c, p, l, e] = await Promise.all([
         api.get('/api/customers?limit=100'),
         api.get('/api/products?limit=200'),
-        api.get('/api/locations?limit=100')
+        api.get('/api/locations?limit=100'),
+        api.get('/api/employees?limit=100&employmentStatus=ACTIVE')
       ])
-      setCustomers(c.data || []); setProducts(p.data || []); setLocations(l.data || [])
+      setCustomers(c.data || []); setProducts(p.data || []); setLocations(l.data || []); setEmployees(e.data || [])
       if (l.data?.length === 1) setSelectedLocation(l.data[0].id)
     } catch (e) { setError('Failed to load: ' + e.message) }
   }
@@ -312,6 +317,7 @@ export default function NewSalePage() {
         salesChannel,
         customerRegistrationNote,
         applyWithholding,
+        soldByEmployeeId: soldByEmployeeId || null,
         ...(verifiedTin ? { customerTin: verifiedTin.tin } : {}),
         items: cart.map(i => ({
           productId: i.productId,
@@ -560,6 +566,7 @@ export default function NewSalePage() {
           <div className="card">
             <h3 className="card-title">Sale Details</h3>
             <div className="form-field"><label>Sales Section</label><select value={salesChannel} onChange={e => setSalesChannel(e.target.value)}><option value="DIRECT">Direct Sales</option><option value="YETESAFEBET">Yetesafebet</option><option value="YALETETAFEBET">Yaletetafebet</option></select></div>
+            <div className="form-field"><label>Sold By (Employee)</label><select value={soldByEmployeeId} onChange={e => setSoldByEmployeeId(e.target.value)}><option value="">Select Employee</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}</select></div>
             <div className="form-field"><label>Payment Method</label><select value={paymentMethod || defaultPaymentMethod} onChange={e => setPaymentMethod(e.target.value)}>{paymentMethods.map((m) => <option key={m} value={m}>{m.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}</option>)}</select></div>
             <div className="form-field"><label>Customer / Registration Note</label><input value={customerRegistrationNote} onChange={e => setCustomerRegistrationNote(e.target.value)} /></div>
           </div>

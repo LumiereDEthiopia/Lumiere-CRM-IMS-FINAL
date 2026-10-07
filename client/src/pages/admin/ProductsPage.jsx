@@ -12,12 +12,14 @@ import { sizeStockSummary } from '../../lib/sizeStock.js'
 import { etb } from '../../lib/currency.js'
 import './admin-styles.css'
 
-// Product section header — the 3 core categories of a fragrance/perfumery shop
+// Product section header — expanded to include Musk and Cream/Jelly
 const SECTIONS = [
   { key: 'ALL', title: 'All Products', sub: 'Complete catalog' },
   { key: 'PURE_OIL', title: 'Pure Oil', sub: 'Sold by gram' },
   { key: 'OIL', title: 'Oil', sub: 'Sold by gram' },
   { key: 'PERFUME', title: 'Perfume', sub: '50ml & 100ml bottles' },
+  { key: 'MUSK', title: 'Musk', sub: '3 ml units' },
+  { key: 'CREAM', title: 'Cream/Jelly', sub: '30ml & 50ml' },
 ]
 
 const imgCol = { key: 'images', label: '', width: '50px', render: (imgs) => (
@@ -72,7 +74,7 @@ function ProductsPage() {
   // Counts per section for the header cards
   useEffect(() => {
     Promise.all(
-      ['PURE_OIL', 'OIL', 'PERFUME'].map((t) =>
+      ['PURE_OIL', 'OIL', 'PERFUME', 'MUSK', 'CREAM'].map((t) =>
         api.get(`/api/products?limit=1&productType=${t}`)
           .then((r) => [t, r.pagination.total])
           .catch(() => [t, 0])
@@ -148,7 +150,7 @@ function ProductsPage() {
       </div>
       <div className="section-tabs" role="tablist" aria-label="Product sections">
         {SECTIONS.map((s) => {
-          const count = s.key === 'ALL' ? (counts.PURE_OIL || 0) + (counts.OIL || 0) + (counts.PERFUME || 0) : counts[s.key]
+          const count = s.key === 'ALL' ? (counts.PURE_OIL || 0) + (counts.OIL || 0) + (counts.PERFUME || 0) + (counts.MUSK || 0) + (counts.CREAM || 0) : counts[s.key]
           return (
             <button key={s.key} type="button" role="tab" aria-selected={section === s.key} className={`section-tab ${section === s.key ? 'active' : ''}`} onClick={() => setSection(s.key)}>
               <div className="section-tab-head">
