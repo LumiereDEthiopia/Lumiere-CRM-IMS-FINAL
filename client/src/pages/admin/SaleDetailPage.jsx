@@ -32,6 +32,7 @@ export default function SaleDetailPage() {
   const giftItems = (sale.items || []).filter((i) => i.isFreeGift)
   const giftValue = giftItems.reduce((s, i) => s + Number(i.regularUnitPrice ?? i.unitPrice ?? 0) * Number(i.quantity || 0), 0)
 
+  console.log("sale", sale)
   return (
     <div className="dashboard-container">
       {searchParams.get('success') === 'true' && <div className="success-text" style={{ marginBottom: '1rem' }}>Sale completed successfully!</div>}
@@ -64,7 +65,8 @@ export default function SaleDetailPage() {
             <div><strong>Payment:</strong> {sale.paymentMethod || '-'}</div>
             <div><strong>Registration Note:</strong> {sale.customerRegistrationNote || '-'}</div>
             <div><strong>Location:</strong> {sale.location?.name}</div>
-            <div><strong>Sold By:</strong> {sale.createdBy || '-'}</div>
+            <div><strong>Sold By Employee:</strong> {sale.soldByEmployee ? `${sale.soldByEmployee.firstName} ${sale.soldByEmployee.lastName} (${sale.soldByEmployee.employeeCode})` : '-'}</div>
+            <div><strong>Created By User:</strong> {sale.createdBy || '-'}</div>
             <div><strong>Status:</strong> <StatusBadge status={sale.status} type="order" /></div>
             {sale.notes && <div><strong>Notes:</strong> {sale.notes}</div>}
           </div>

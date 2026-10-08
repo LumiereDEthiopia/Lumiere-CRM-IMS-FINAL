@@ -13,16 +13,19 @@ function money(n) {
 
 function ReportsPage() {
   const [tab, setTab] = useState('sales')
-  const [filters, setFilters] = useState({ startDate: '', endDate: '', locationId: '' })
+  const [filters, setFilters] = useState({ startDate: '', endDate: '', locationId: '', employeeId: '' })
   const [locations, setLocations] = useState([])
+  const [employees, setEmployees] = useState([])
   const [sales, setSales] = useState(null)
   const [inventory, setInventory] = useState(null)
   const [crm, setCrm] = useState(null)
+  const [salesLogs, setSalesLogs] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     api.get('/api/locations').then((r) => setLocations(r.data?.data || r.data || [])).catch(() => {})
+    api.get('/api/employees').then((r) => setEmployees(r.data?.data || r.data || [])).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -40,6 +43,14 @@ function ReportsPage() {
         if (filters.locationId) q.set('locationId', filters.locationId)
         const r = await api.get(`/api/reports/sales?${q}`)
         setSales(r.data)
+      } else if (name === 'sales-logs') {
+        const q = new URLSearchParams()
+        if (filters.startDate) q.set('startDate', filters.startDate)
+        if (filters.endDate) q.set('endDate', filters.endDate)
+        if (filters.locationId) q.set('locationId', filters.locationId)
+        if (filters.employeeId) q.set('employeeId', filters.employeeId)
+        const r = await api.get(`/api/reports/sales-logs?${q}`)
+        setSalesLogs(r.data)
       } else if (name === 'inventory') {
         const r = await api.get('/api/reports/inventory')
         setInventory(r.data)
@@ -56,9 +67,10 @@ function ReportsPage() {
   function exportCsv(type) {
     const token = localStorage.getItem('auth_token')
     const base = API_BASE_URL
-    window.open(`${base}/api/exports/${type}?format=csv&token=`, '_blank')
+    const exportType = tab === 'sales-logs' ? 'sales-logs' : tab === 'crm' ? 'customers' : tab === 'inventory' ? 'inventory' : 'sales'
+    window.open(`${base}/api/exports/${exportType}?format=csv&token=`, '_blank')
     // Prefer fetch blob for auth header
-    fetch(`${base}/api/exports/${type}?format=csv`, {
+    fetch(`${base}/api/exports/${exportType}?format=csv`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then((res) => res.blob())
@@ -66,7 +78,7 @@ function ReportsPage() {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${type}-export.csv`
+        a.download = `${exportType}-export.csv`
         a.click()
         URL.revokeObjectURL(url)
       })
@@ -91,9 +103,9 @@ function ReportsPage() {
       </div>
 
       <div className="tab-row" role="tablist">
-        {['sales', 'inventory', 'crm'].map((t) => (
+        {['sales', 'sales-logs', 'inventory', 'crm'].map((t) => (
           <button key={t} type="button" role="tab" aria-selected={tab === t} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'sales-logs' ? 'Sales Log' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
         <Link to="/admin/reports/accounting" className="tab-btn" style={{ textDecoration: 'none', display: 'inline-block' }}>Accounting →</Link>
@@ -117,6 +129,34 @@ function ReportsPage() {
             </select>
           </label>
           <button type="button" className="btn btn-primary" onClick={() => loadTab('sales')}>Apply</button>
+        </div>
+      )}
+
+      {tab === 'sales-logs' && (
+        <div className="filter-bar">
+          <label>
+            Start
+            <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} />
+          </label>
+          <label>
+            End
+            <input type="date" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} />
+          </label>
+          <label>
+            Location
+            <select value={filters.locationId} onChange={(e) => setFilters({ ...filters, locationId: e.target.value })}>
+              <option value="">All</option>
+              {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </label>
+          <label>
+            Employee
+            <select value={filters.employeeId} onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}>
+              <option value="">All</option>
+              {employees.map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}
+            </select>
+          </label>
+          <button type="button" className="btn btn-primary" onClick={() => loadTab('sales-logs')}>Apply</button>
         </div>
       )}
 
@@ -178,6 +218,37 @@ function ReportsPage() {
           <div className="card">
             <h3 className="card-title">By Product</h3>
             <DataTable columns={['Product', 'Qty', 'Revenue', 'Txns']} rows={(sales.byProduct || []).map((p) => [p.name, p.quantity, money(p.revenue), p.transactions])} />
+          </div>
+          <div className="card">
+            <h3 className="card-title">Employee Performance (by Sales Count)</h3>
+            <DataTable columns={['Employee', 'Sales Count', 'Total Revenue']} rows={(sales.employeePerformance || []).map((e) => [e.name, e.salesCount, money(e.totalRevenue)])} empty="No employee sales data." />
+          </div>
+        </>
+      )}
+
+      {!loading && tab === 'sales-logs' && salesLogs && (
+        <>
+          <div className="card-grid">
+            <Metric title="Total Logs" value={salesLogs.pagination?.total || 0} />
+            <Metric title="Total Revenue" value={money(salesLogs.data?.reduce((sum, log) => sum + Number(log.totalAmount || 0), 0))} />
+          </div>
+          <div className="card">
+            <h3 className="card-title">Sales Log</h3>
+            <DataTable
+              columns={['Sale #', 'Date', 'Employee', 'Employee Code', 'User', 'Location', 'Customer', 'TIN', 'Amount']}
+              rows={(salesLogs.data || []).map((log) => [
+                log.saleNumber,
+                new Date(log.soldAt).toLocaleString(),
+                log.employeeName || '-',
+                log.employeeCode || '-',
+                log.userName || '-',
+                log.locationName || '-',
+                log.customerName || '-',
+                log.customerTin || '-',
+                money(log.totalAmount)
+              ])}
+              empty="No sales logs found for the selected filters."
+            />
           </div>
         </>
       )}

@@ -271,7 +271,15 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
   const itemWhere = { sale: where }
   if (productFilter) itemWhere.product = productFilter
 
-  const [byProduct, byBrand, byCategory, unitsSold, byProductType, byEmployee, creamConsumption] = await Promise.all([
+  // Pure Oil consumption from Cream/Jelly sales
+  const creamWhere = { type: 'CREAM_CONSUMPTION' }
+  if (startDate || endDate) {
+    creamWhere.createdAt = {}
+    if (startDate) creamWhere.createdAt.gte = new Date(startDate)
+    if (endDate) creamWhere.createdAt.lte = new Date(endDate + 'T23:59:59')
+  }
+
+  const [byProduct, byBrand, byCategory, unitsSold, byProductType, byEmployee, employeeSalesLog, creamConsumption] = await Promise.all([
   prisma.saleItem.groupBy({
     by: ['productId', 'productName'],
     where: itemWhere,
@@ -348,14 +356,16 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
     _count: true
   }),
 
+  // Employee sales by count (from SalesLog for more accurate tracking)
+  prisma.saleLog.groupBy({
+    by: ['employeeId'],
+    where: where.soldAt ? { soldAt: where.soldAt } : {},
+    _sum: { totalAmount: true },
+    _count: true
+  }),
+
   // Pure Oil consumption from Cream/Jelly sales
-  const creamWhere = { type: 'CREAM_CONSUMPTION' }
-  if (startDate || endDate) {
-    creamWhere.createdAt = {}
-    if (startDate) creamWhere.createdAt.gte = new Date(startDate)
-    if (endDate) creamWhere.createdAt.lte = new Date(endDate + 'T23:59:59')
-  }
-  const creamConsumption = await prisma.stockMovement.findMany({
+  prisma.stockMovement.findMany({
     where: creamWhere,
     select: {
       productId: true,
@@ -446,6 +456,12 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
       discount: Number(e._sum.discount || 0),
       transactions: e._count
     })),
+    employeePerformance: (employeeSalesLog || []).map((e) => ({
+      employeeId: e.employeeId,
+      name: e.employeeId ? employeeMap[e.employeeId] || 'Unassigned' : 'Unassigned',
+      totalRevenue: Number(e._sum.totalAmount || 0),
+      salesCount: e._count
+    })).sort((a, b) => b.salesCount - a.salesCount),
     creamConsumption: creamConsumption.map((cm) => ({
       productId: cm.productId,
       productName: productMap[cm.productId] || 'Unknown',
@@ -455,6 +471,40 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
       createdAt: cm.createdAt
     })),
     recentSales
+  }
+}
+
+export async function getSalesLogs({ startDate, endDate, locationId, employeeId, page = 1, limit = 50 }) {
+  const where = {}
+  if (startDate || endDate) {
+    where.soldAt = {}
+    if (startDate) where.soldAt.gte = new Date(startDate)
+    if (endDate) where.soldAt.lte = new Date(endDate + 'T23:59:59')
+  }
+  if (locationId) where.locationId = locationId
+  if (employeeId) where.employeeId = employeeId
+
+  page = parseInt(page) || 1
+  limit = parseInt(limit) || 50
+
+  const [logs, total] = await Promise.all([
+    prisma.saleLog.findMany({
+      where,
+      orderBy: { soldAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit
+    }),
+    prisma.saleLog.count({ where })
+  ])
+
+  return {
+    data: logs,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit)
+    }
   }
 }
 

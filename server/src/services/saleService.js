@@ -418,10 +418,23 @@ export async function getSale(id) {
       customer: true,
       location: true,
       soldByEmployee: { select: { id: true, firstName: true, lastName: true, employeeCode: true } },
+      salesLog: true,
       items: { include: { product: { select: { id: true, name: true, sku: true, size: true, productType: true, price: true, price100ml: true, stockQuantity: true, brand: { select: { id: true, name: true } }, category: { select: { id: true, name: true } }, flavor: true, form: true, pureOilProductId: true } } } }
     }
   })
   if (!sale) throw new ApiError(404, 'Sale not found')
+
+  // If no soldByEmployee but we have createdBy, fetch the employee associated with that user
+  if (!sale.soldByEmployee && sale.createdBy) {
+    const employee = await prisma.employee.findUnique({
+      where: { userId: sale.createdBy },
+      select: { id: true, firstName: true, lastName: true, employeeCode: true }
+    })
+    if (employee) {
+      sale.soldByEmployee = employee
+    }
+  }
+
   return sale
 }
 
@@ -557,6 +570,17 @@ export async function createSale({
   soldByEmployeeId = null
 }) {
   const tinSnapshot = await resolveSaleTin({ customerId, customerTin })
+
+  // If soldByEmployeeId is provided, use it; otherwise auto-detect from logged-in user
+  let finalSoldByEmployeeId = soldByEmployeeId
+  if (!finalSoldByEmployeeId && createdBy) {
+    const employee = await prisma.employee.findUnique({
+      where: { userId: createdBy },
+      select: { id: true }
+    })
+    finalSoldByEmployeeId = employee?.id || null
+  }
+
   // Read tax/withholding configuration and the customer TIN state OUTSIDE the
   // interactive transaction. These are display-only reads — running them
   // inside the transaction held a pool connection for several extra remote
@@ -719,8 +743,8 @@ export async function createSale({
         customerTin: tinSnapshot.customerTin,
         customerTinName: tinSnapshot.customerTinName,
         customerTinVerified: tinSnapshot.customerTinVerified,
-        soldByEmployeeId,
         location: { connect: { id: locationId } },
+        ...(finalSoldByEmployeeId ? { soldByEmployee: { connect: { id: finalSoldByEmployeeId } } } : {}),
         ...(customerId ? { customer: { connect: { id: customerId } } } : {})
       }
     })
@@ -830,6 +854,72 @@ export async function createSale({
     // 0.00 unless withholding is explicitly applied to this sale — and it never
     // changes the Total either way.
     await tx.sale.update({ where: { id: sale.id }, data: { subtotal, total, taxInvoiceNumber: invoiceNumber, vatRate, vatAmount, withholdingRate: withholdingEnabled ? withholdingRate : 0, withholdingAmount } })
+
+    // ---- Create Sales Log entry for tracking who made the sale ----
+    let employeeName = null
+    let employeeCode = null
+    let userName = null
+    let locationName = null
+    let customerName = null
+    let customerTinLog = null
+
+    if (finalSoldByEmployeeId) {
+      const employee = await tx.employee.findUnique({
+        where: { id: finalSoldByEmployeeId },
+        select: { firstName: true, lastName: true, employeeCode: true }
+      })
+      if (employee) {
+        employeeName = `${employee.firstName} ${employee.lastName}`.trim()
+        employeeCode = employee.employeeCode
+      }
+    }
+
+    if (createdBy) {
+      const user = await tx.user.findUnique({
+        where: { id: createdBy },
+        select: { name: true }
+      })
+      if (user) {
+        userName = user.name
+      }
+    }
+
+    const location = await tx.location.findUnique({
+      where: { id: locationId },
+      select: { name: true }
+    })
+    if (location) {
+      locationName = location.name
+    }
+
+    if (customerId) {
+      const customer = await tx.customer.findUnique({
+        where: { id: customerId },
+        select: { name: true, tinNumber: true }
+      })
+      if (customer) {
+        customerName = customer.name
+        customerTinLog = customer.tinNumber
+      }
+    }
+
+    await tx.saleLog.create({
+      data: {
+        saleId: sale.id,
+        saleNumber,
+        employeeId: finalSoldByEmployeeId,
+        employeeName,
+        employeeCode,
+        userId: createdBy,
+        userName,
+        locationId,
+        locationName,
+        customerName,
+        customerTin: customerTinLog,
+        totalAmount: total,
+        soldAt: soldAt ? new Date(soldAt) : new Date()
+      }
+    })
 
     // ---- Audit trail (existing AuditLog system — nothing new invented) ----
     await createAuditLog({

@@ -810,12 +810,38 @@ model Sale {
   location                 Location   @relation(fields: [locationId], references: [id])
   items                    SaleItem[]
   soldByEmployee           Employee?  @relation("SaleSoldBy", fields: [soldByEmployeeId], references: [id])
+  salesLog                 SaleLog?
 
   @@index([customerId])
   @@index([locationId])
   @@index([status])
   @@index([soldAt])
   @@index([soldByEmployeeId])
+}
+
+model SaleLog {
+  id                String   @id @default(cuid())
+  saleId            String   @unique
+  saleNumber        String
+  employeeId        String?
+  employeeName      String?
+  employeeCode      String?
+  userId            String?
+  userName          String?
+  locationId        String?
+  locationName      String?
+  customerName      String?
+  customerTin       String?
+  totalAmount       Decimal
+  soldAt            DateTime
+  createdAt         DateTime @default(now())
+  sale              Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([employeeId])
+  @@index([locationId])
+  @@index([soldAt])
+  @@index([createdAt])
 }
 
 model SaleItem {

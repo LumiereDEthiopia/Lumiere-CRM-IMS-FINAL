@@ -566,7 +566,7 @@ export default function NewSalePage() {
           <div className="card">
             <h3 className="card-title">Sale Details</h3>
             <div className="form-field"><label>Sales Section</label><select value={salesChannel} onChange={e => setSalesChannel(e.target.value)}><option value="DIRECT">Direct Sales</option><option value="YETESAFEBET">Yetesafebet</option><option value="YALETETAFEBET">Yaletetafebet</option></select></div>
-            <div className="form-field"><label>Sold By (Employee)</label><select value={soldByEmployeeId} onChange={e => setSoldByEmployeeId(e.target.value)}><option value="">Select Employee</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}</select></div>
+            <div className="form-field"><label>Sold By (Employee) - Optional</label><select value={soldByEmployeeId} onChange={e => setSoldByEmployeeId(e.target.value)}><option value="">Auto-detect from logged-in user</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName} ({e.employeeCode})</option>)}</select></div>
             <div className="form-field"><label>Payment Method</label><select value={paymentMethod || defaultPaymentMethod} onChange={e => setPaymentMethod(e.target.value)}>{paymentMethods.map((m) => <option key={m} value={m}>{m.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}</option>)}</select></div>
             <div className="form-field"><label>Customer / Registration Note</label><input value={customerRegistrationNote} onChange={e => setCustomerRegistrationNote(e.target.value)} /></div>
           </div>

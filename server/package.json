@@ -20,7 +20,8 @@
     "seed": "node prisma/seed.js",
     "seed:demo": "node prisma/demo-seed.cjs",
     "seed:permissions": "node seed-permissions.cjs",
-    "seed:finance": "node seed-finance.cjs"
+    "seed:finance": "node seed-finance.cjs",
+    "seed_all": "npm run seed && npm run seed:demo && npm run seed:permissions && npm run seed:finance"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.658.1",
@@ -41,3 +42,4 @@
     "node": ">=18.0.0"
   }
 }
+

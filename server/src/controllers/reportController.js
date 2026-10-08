@@ -3,7 +3,7 @@
  */
 import {
   getDashboardSummary, getSalesReport, getInventoryReport,
-  getCrmAnalytics, getEmployeeAnalytics, getProductAnalytics
+  getCrmAnalytics, getEmployeeAnalytics, getProductAnalytics, getSalesLogs
 } from '../services/reportService.js'
 import { globalSearch } from '../services/searchService.js'
 
@@ -13,6 +13,10 @@ export async function dashboardSummary(req, res, next) {
 
 export async function salesReport(req, res, next) {
   try { res.json({ success: true, data: await getSalesReport(req.query) }) } catch (e) { next(e) }
+}
+
+export async function salesLogs(req, res, next) {
+  try { res.json({ success: true, data: await getSalesLogs(req.query) }) } catch (e) { next(e) }
 }
 
 export async function inventoryReport(req, res, next) {

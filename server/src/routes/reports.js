@@ -1,13 +1,14 @@
 import { Router } from 'express'
 import {
   dashboardSummary, salesReport, inventoryReport,
-  crmAnalytics, employeeAnalytics, productAnalytics, search
+  crmAnalytics, employeeAnalytics, productAnalytics, search, salesLogs
 } from '../controllers/reportController.js'
 import { requirePermission, requireAnyPermission } from '../middleware/authorize.js'
 
 const router = Router()
 router.get('/summary', requireAnyPermission('report:view'), dashboardSummary)
 router.get('/sales', requireAnyPermission('report:view', 'sale:view'), salesReport)
+router.get('/sales-logs', requireAnyPermission('report:view', 'sale:view'), salesLogs)
 router.get('/inventory', requireAnyPermission('report:view', 'inventory:view'), inventoryReport)
 router.get('/crm', requireAnyPermission('report:view', 'customer:view'), crmAnalytics)
 router.get('/employees', requirePermission('employee:view'), employeeAnalytics)
