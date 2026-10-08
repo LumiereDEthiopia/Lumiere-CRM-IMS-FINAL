@@ -7,7 +7,7 @@ import { ApiError } from '../middleware/errorHandler.js'
 import { createAuditLog } from './auditService.js'
 import { randomBytes, createHash, timingSafeEqual } from 'crypto'
 
-const activeSessions = new Map()
+export const activeSessions = new Map()
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 function hashPassword(password) {

@@ -62,7 +62,7 @@ function SettingsPage() {
   const [error, setError] = useState('')
   const [section, setSection] = useState('General')
   const [locations, setLocations] = useState([])
-  const { user, hasPermission } = useAuth()
+  const { user, hasPermission, setPermissions } = useAuth()
   const canManageRoles = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || hasPermission('setting:manage')
   const canManageSettings = canManageRoles
   const [roles, setRoles] = useState([])
@@ -159,6 +159,20 @@ function SettingsPage() {
       const list = rr.data || []
       setRoles(list)
       const saved = list.find((r) => r.id === selectedRoleId)
+
+      // Refresh current user's permissions if they have this role
+      if (user && saved && user.role === saved.name) {
+        try {
+          const meRes = await api.get('/api/auth/me')
+          const payload = meRes.data?.data || meRes.data || meRes
+          if (payload.permissions) {
+            setPermissions(payload.permissions)
+          }
+        } catch (refreshErr) {
+          console.error('Failed to refresh permissions:', refreshErr)
+        }
+      }
+
       setRoleMsg(`Permissions saved for ${saved?.label || 'role'}. Changes apply to every account with this role.`)
     } catch (e) {
       setRoleErr(e.message)

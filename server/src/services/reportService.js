@@ -271,8 +271,8 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
   const itemWhere = { sale: where }
   if (productFilter) itemWhere.product = productFilter
 
-  // Pure Oil consumption from Cream/Jelly sales
-  const creamWhere = { type: 'CREAM_CONSUMPTION' }
+  // Pure Oil consumption from Cream/Jelly manufacturing
+  const creamWhere = { type: 'CREAM_MANUFACTURING' }
   if (startDate || endDate) {
     creamWhere.createdAt = {}
     if (startDate) creamWhere.createdAt.gte = new Date(startDate)

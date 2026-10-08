@@ -276,6 +276,48 @@ export async function createProduct(req, res, next) {
       await setProductItems(product.id, normalized.productItems, req.user?.id)
     }
 
+    // For Cream/Jelly products, deduct Pure Oil during manufacturing
+    if (productType === 'CREAM' && pureOilProductId) {
+      const stockToCreate = resolveProductStock({ productType, size, stockQuantity, stock50ml, stock100ml }).stockQuantity
+      const consumptionRate = size === '50 ml' ? 6 : 4 // 50ml uses 6ml, 30ml uses 4ml
+      const pureOilToDeduct = stockToCreate * consumptionRate
+
+      // Validate Pure Oil stock
+      const pureOil = await prisma.product.findUnique({
+        where: { id: pureOilProductId },
+        select: { id: true, name: true, stockQuantity: true }
+      })
+
+      if (!pureOil) {
+        throw new ApiError(400, 'Pure Oil product not found')
+      }
+
+      if (pureOil.stockQuantity < pureOilToDeduct) {
+        throw new ApiError(400, `Insufficient Pure Oil stock. Required: ${pureOilToDeduct} ml, Available: ${pureOil.stockQuantity} ml`)
+      }
+
+      // Deduct Pure Oil in a transaction
+      await prisma.$transaction([
+        // Update Pure Oil stock
+        prisma.product.update({
+          where: { id: pureOilProductId },
+          data: { stockQuantity: { decrement: pureOilToDeduct } }
+        }),
+        // Create stock movement for Pure Oil deduction
+        prisma.stockMovement.create({
+          data: {
+            productId: pureOilProductId,
+            quantity: -pureOilToDeduct,
+            type: 'CREAM_MANUFACTURING',
+            reason: `Manufactured ${stockToCreate} units of ${product.name} (${size})`,
+            referenceId: product.id,
+            referenceType: 'PRODUCT',
+            userId: req.user?.id || null
+          }
+        })
+      ])
+    }
+
     res.status(201).json({ success: true, data: product })
   } catch (error) {
     next(error)

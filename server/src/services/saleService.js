@@ -261,112 +261,7 @@ export function validateCombinedSaleStock(lines) {
   }
 }
 
-/**
- * Calculate Pure Oil consumption for Cream/Jelly products.
- * 30 ml units consume 4 ml per unit
- * 50 ml units consume 6 ml per unit
- */
-function calculatePureOilConsumption(product, quantity) {
-  if (product.productType !== 'CREAM') return { mlPerUnit: 0, totalMl: 0 }
-  const size = String(product.size || '').trim().toLowerCase()
-  const mlPerUnit = size === '50 ml' ? 6 : size === '30 ml' ? 4 : 0
-  const totalMl = mlPerUnit * quantity
-  return { mlPerUnit, totalMl }
-}
-
-/**
- * Validate Pure Oil stock for Cream/Jelly products.
- * Throws if insufficient Pure Oil stock exists.
- */
-async function validatePureOilStock(tx, creamItems, locationId) {
-  const consumptionByOil = new Map()
-
-  for (const item of creamItems) {
-    const product = await tx.product.findUnique({
-      where: { id: item.productId },
-      select: { id: true, name: true, productType: true, size: true, pureOilProductId: true }
-    })
-    if (!product || product.productType !== 'CREAM' || !product.pureOilProductId) continue
-
-    const { mlPerUnit, totalMl } = calculatePureOilConsumption(product, item.quantity)
-    if (totalMl === 0) continue
-
-    const current = consumptionByOil.get(product.pureOilProductId) || {
-      pureOilId: product.pureOilProductId,
-      productName: product.name,
-      totalMl: 0
-    }
-    current.totalMl += totalMl
-    consumptionByOil.set(product.pureOilProductId, current)
-  }
-
-  for (const [oilId, demand] of consumptionByOil) {
-    const oilInv = await tx.inventory.findUnique({
-      where: { productId_locationId: { productId: oilId, locationId } }
-    })
-    const available = oilInv ? Number(oilInv.availableQuantity) : 0
-    if (demand.totalMl > available + 1e-9) {
-      throw new ApiError(400, `Insufficient Pure Oil stock for ${demand.productName}. Required: ${demand.totalMl} ml, Available: ${available} ml`)
-    }
-  }
-}
-
-/**
- * Deduct Pure Oil stock for Cream/Jelly products and create movements.
- */
-async function deductPureOilForCream(tx, creamItems, locationId, saleId, userId) {
-  for (const item of creamItems) {
-    const product = await tx.product.findUnique({
-      where: { id: item.productId },
-      select: { id: true, name: true, productType: true, size: true, pureOilProductId: true }
-    })
-    if (!product || product.productType !== 'CREAM' || !product.pureOilProductId) continue
-
-    const { mlPerUnit, totalMl } = calculatePureOilConsumption(product, item.quantity)
-    if (totalMl === 0) continue
-
-    // Deduct from Pure Oil inventory
-    const oilInv = await tx.inventory.findUnique({
-      where: { productId_locationId: { productId: product.pureOilProductId, locationId } }
-    })
-    if (oilInv) {
-      const previousQuantity = Number(oilInv.quantity)
-      const newQty = Math.max(0, previousQuantity - totalMl)
-      await tx.inventory.update({
-        where: { id: oilInv.id },
-        data: { quantity: newQty, availableQuantity: newQty - Number(oilInv.reservedQuantity) }
-      })
-
-      // Deduct from Pure Oil product-level stock
-      const oilProduct = await tx.product.findUnique({
-        where: { id: product.pureOilProductId },
-        select: { stockQuantity: true }
-      })
-      if (oilProduct) {
-        await tx.product.update({
-          where: { id: product.pureOilProductId },
-          data: { stockQuantity: Math.max(0, Number(oilProduct.stockQuantity) - totalMl) }
-        })
-      }
-
-      // Create inventory movement for Pure Oil consumption
-      await tx.stockMovement.create({
-        data: {
-          productId: product.pureOilProductId,
-          locationId,
-          type: 'CREAM_CONSUMPTION',
-          quantity: totalMl,
-          previousQuantity,
-          resultingQuantity: newQty,
-          referenceType: 'SALE',
-          referenceId: saleId,
-          userId,
-          notes: `Pure Oil consumed by ${product.name} (${product.size}): ${item.quantity} units × ${mlPerUnit} ml/unit = ${totalMl} ml`
-        }
-      })
-    }
-  }
-}
+// Pure Oil consumption functions removed - consumption now happens during product manufacturing
 
 export async function listSales({ page = 1, limit = 20, search, status, locationId, salesChannel, dateFrom, dateTo, createdBy, minAmount, maxAmount }) {
   page = parseInt(page) || 1
@@ -662,13 +557,6 @@ export async function createSale({
     }
     validateCombinedSaleStock(linePricing)
 
-    // Validate Pure Oil stock for Cream/Jelly products
-    const creamItems = items.filter((i) => {
-      const p = linePricing.find((lp) => lp.item.productId === i.productId)?.product
-      return p && p.productType === 'CREAM'
-    })
-    await validatePureOilStock(tx, creamItems, locationId)
-
     // ---- Pass 2: totals, permission gate & tax — still before any write ----
     // subtotal = gross of PAID lines only (free gifts never enter revenue).
     let subtotal = 0
@@ -832,9 +720,6 @@ export async function createSale({
       lines: items.map((i) => ({ productId: i.productId, quantity: parseFloat(i.quantity) })),
       userId: createdBy
     })
-
-    // Deduct Pure Oil stock for Cream/Jelly products — same transaction
-    await deductPureOilForCream(tx, creamItems, locationId, sale.id, createdBy)
 
     // Tax invoice is issued for all taxable supplies by a VAT-registered business,
     // per Ethiopian VAT law — regardless of customer TIN status.

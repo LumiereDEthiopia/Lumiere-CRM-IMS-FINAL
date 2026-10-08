@@ -7,6 +7,7 @@
 import prisma from '../config/prisma.js'
 import { ApiError } from '../middleware/errorHandler.js'
 import { createAuditLog } from '../services/auditService.js'
+import { activeSessions } from '../services/authService.js'
 
 /**
  * Permission catalog grouped by business module.
@@ -268,6 +269,21 @@ export async function updateRole(req, res, next) {
       data,
       include: { permissions: { select: { name: true } } }
     })
+
+    // Refresh permissions for all active sessions with this role
+    for (const [token, session] of activeSessions.entries()) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.userId },
+        include: { role: { include: { permissions: true } } }
+      })
+      if (user && user.roleId === role.id) {
+        const permissions = user.role?.permissions?.map((p) => p.name) || []
+        const roleName = user.role?.name || 'STAFF'
+        session.permissions = permissions
+        session.role = roleName
+      }
+    }
+
     await createAuditLog({
       userId: req.user?.id, action: 'ROLE_PERMISSIONS_UPDATE', entity: 'Role', entityId: role.id,
       details: { name: role.name, permissions: updated.permissions.map((p) => p.name) }
