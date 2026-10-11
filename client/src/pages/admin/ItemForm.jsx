@@ -17,15 +17,28 @@ const emptyForm = {
 function ItemForm({ initialData, onSubmit, onCancel, isEditing }) {
   const [form, setForm] = useState(initialData ? { ...emptyForm, ...initialData } : emptyForm)
   const [categories, setCategories] = useState([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [categoriesError, setCategoriesError] = useState('')
   const [suppliers, setSuppliers] = useState([])
   const [locations, setLocations] = useState([])
   const [initialStock, setInitialStock] = useState([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    api.get('/api/item-categories').then((r) => setCategories(r.data || [])).catch(() => {})
+    let active = true
+    setCategoriesLoading(true)
+    setCategoriesError('')
+    // Use the same Category records/IDs as the /admin/categories page.
+    api.get('/api/categories?flat=true&isActive=true')
+      .then((r) => { if (active) setCategories(r.data || []) })
+      .catch((err) => {
+        console.error('Failed to load categories:', err)
+        if (active) setCategoriesError(err.message || 'Could not load categories')
+      })
+      .finally(() => { if (active) setCategoriesLoading(false) })
     api.get('/api/suppliers?limit=100').then((r) => setSuppliers(r.data || [])).catch(() => {})
     api.get('/api/locations').then((r) => setLocations(r.data || [])).catch(() => {})
+    return () => { active = false }
   }, [])
 
   const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
@@ -71,10 +84,11 @@ function ItemForm({ initialData, onSubmit, onCancel, isEditing }) {
           <Field label="Item Code *" value={form.itemCode} onChange={(v) => set('itemCode', v)} placeholder="unique, e.g. BOT-100-SQ" disabled={isEditing} />
           <div className="form-field">
             <label>Category *</label>
-            <select value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)}>
-              <option value="">Select category...</option>
+            <select value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)} disabled={categoriesLoading}>
+              <option value="">{categoriesLoading ? 'Loading categories...' : 'Select category...'}</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            {categoriesError && <span style={{ color: '#C62828', fontSize: '0.72rem' }}>Could not load categories: {categoriesError}</span>}
           </div>
           <Field label="Brand" value={form.brandName} onChange={(v) => set('brandName', v)} placeholder="optional" />
           <Field label="SKU" value={form.sku} onChange={(v) => set('sku', v)} />

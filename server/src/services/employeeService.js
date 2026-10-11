@@ -151,7 +151,10 @@ export async function getEmployeeDetails(id, { includeSensitive = false } = {}) 
   return { ...detail, payroll: salary }
 }
 
-export async function createEmployee(data, userId) {
+export async function createEmployee(data, userId, actor = null) {
+  if ((data.accountRole || data.accountEmail || data.accountPassword) && actor?.role !== 'SUPER_ADMIN') {
+    throw new ApiError(403, 'Only a Super Admin can create or assign employee accounts')
+  }
   if (data.managerId && data.managerId === data.id) throw new ApiError(400, 'Employee cannot manage themselves')
   if (data.managerId) await checkCircularManagement(data.managerId, data.id)
   if (data.userId) {
@@ -168,10 +171,14 @@ export async function createEmployee(data, userId) {
   if (data.accountEmail || data.accountRole) {
     const email = String(data.accountEmail || data.email || '').toLowerCase().trim()
     if (!email || !data.accountPassword) throw new ApiError(400, 'Account email and password are required')
-    const role = await prisma.role.findUnique({ where: { name: data.accountRole || 'ADMIN' } })
+    if (!data.accountRole && actor?.role !== 'SUPER_ADMIN') throw new ApiError(403, 'Choose an account role; default Admin assignment is restricted to Super Admin')
+    const role = await prisma.role.findUnique({ where: { name: data.accountRole || 'SALES' } })
     if (!role) throw new ApiError(400, 'Selected account role does not exist')
+    if (role.name === 'SUPER_ADMIN' && actor?.role !== 'SUPER_ADMIN') throw new ApiError(403, 'Only a Super Admin can assign the Super Admin role')
+    if (role.name === 'ADMIN' && actor?.role !== 'SUPER_ADMIN') throw new ApiError(403, 'Only a Super Admin can assign the protected Admin role')
     const user = await prisma.user.create({ data: { name: `${data.firstName} ${data.lastName}`, email, passwordHash: hashPassword(data.accountPassword), phone: data.phone, roleId: role.id } })
     linkedUserId = user.id
+    await createAuditLog({ userId, action: 'USER_ROLE_ASSIGNED', entity: 'User', entityId: user.id, details: { roleId: role.id, roleName: role.name, employeeCode } })
   }
   const employee = await prisma.employee.create({
     data: {
@@ -228,9 +235,12 @@ export async function createEmployee(data, userId) {
   return getEmployee(employee.id, { includeSensitive: true })
 }
 
-export async function updateEmployee(id, data, userId) {
+export async function updateEmployee(id, data, userId, actor = null) {
   const existing = await prisma.employee.findUnique({ where: { id } })
   if (!existing) throw new ApiError(404, 'Employee not found')
+  if ((data.accountRole !== undefined || data.accountEmail !== undefined || data.accountPassword !== undefined) && actor?.role !== 'SUPER_ADMIN') {
+    throw new ApiError(403, 'Only a Super Admin can manage employee account assignments')
+  }
   if (data.managerId && data.managerId === id) throw new ApiError(400, 'Employee cannot manage themselves')
   if (data.managerId && data.managerId !== existing.managerId) await checkCircularManagement(data.managerId, id)
 
@@ -305,13 +315,16 @@ export async function updateEmployee(id, data, userId) {
     })
   }
 
-  if (!employee.userId && (data.accountRole || data.accountEmail)) {
+    if (!employee.userId && (data.accountRole || data.accountEmail)) {
     const email = String(data.accountEmail || data.email || '').toLowerCase().trim()
     if (!email || !data.accountPassword || !data.accountRole) throw new ApiError(400, 'Account role, email, and password are required')
     const role = await prisma.role.findUnique({ where: { name: data.accountRole } })
     if (!role) throw new ApiError(400, 'Selected account role does not exist')
+    if (role.name === 'SUPER_ADMIN' && actor?.role !== 'SUPER_ADMIN') throw new ApiError(403, 'Only a Super Admin can assign the Super Admin role')
+    if (role.name === 'ADMIN' && actor?.role !== 'SUPER_ADMIN') throw new ApiError(403, 'Only a Super Admin can assign the protected Admin role')
     const user = await prisma.user.create({ data: { name: `${employee.firstName} ${employee.lastName}`, email, passwordHash: hashPassword(data.accountPassword), phone: employee.phone, roleId: role.id } })
     await prisma.employee.update({ where: { id }, data: { userId: user.id } })
+    await createAuditLog({ userId, action: 'USER_ROLE_ASSIGNED', entity: 'User', entityId: user.id, details: { roleId: role.id, roleName: role.name, employeeId: id } })
   } else if (employee.userId && (data.accountRole || data.accountPassword || data.accountEmail)) {
     const accountData = {}
     if (data.accountEmail) accountData.email = data.accountEmail.toLowerCase().trim()
@@ -319,7 +332,11 @@ export async function updateEmployee(id, data, userId) {
     if (data.accountRole) {
       const role = await prisma.role.findUnique({ where: { name: data.accountRole } })
       if (!role) throw new ApiError(400, 'Selected account role does not exist')
+      if (role.name === 'SUPER_ADMIN' && actor?.role !== 'SUPER_ADMIN') throw new ApiError(403, 'Only a Super Admin can assign the Super Admin role')
+      if (role.name === 'ADMIN' && actor?.role !== 'SUPER_ADMIN') throw new ApiError(403, 'Only a Super Admin can assign the protected Admin role')
+      const priorUser = await prisma.user.findUnique({ where: { id: employee.userId }, select: { role: { select: { name: true } } } })
       accountData.roleId = role.id
+      await createAuditLog({ userId, action: 'USER_ROLE_CHANGED', entity: 'User', entityId: employee.userId, details: { employeeId: id, previousRole: priorUser?.role?.name || null, newRole: role.name } })
     }
     await prisma.user.update({ where: { id: employee.userId }, data: accountData })
   }

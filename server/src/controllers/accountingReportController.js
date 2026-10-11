@@ -2,7 +2,7 @@
  * Accounting Report Controller — the 4 standard accounting reports.
  */
 import {
-  getTrialBalance, getIncomeStatement, getBalanceSheet, getCashFlowStatement, getCompanyHeader, listChartOfAccounts
+  getTrialBalance, getIncomeStatement, getBalanceSheet, getCashFlowStatement, getChangesInEquity, getCompanyHeader, listChartOfAccounts
 } from '../services/accountingReportService.js'
 import { postManualEntry, MANUAL_KINDS } from '../services/accountingService.js'
 import { ApiError } from '../middleware/errorHandler.js'
@@ -33,6 +33,10 @@ export async function cashFlowStatement(req, res, next) {
   try { res.json({ success: true, data: await getCashFlowStatement(filters(req)) }) } catch (e) { next(e) }
 }
 
+export async function changesInEquity(req, res, next) {
+  try { res.json({ success: true, data: await getChangesInEquity(filters(req)) }) } catch (e) { next(e) }
+}
+
 export async function companyHeader(req, res, next) {
   try { res.json({ success: true, data: await getCompanyHeader() }) } catch (e) { next(e) }
 }
@@ -51,4 +55,4 @@ export async function createManualEntry(req, res, next) {
   } catch (e) { next(e) }
 }
 
-export default { trialBalance, incomeStatement, balanceSheet, cashFlowStatement, companyHeader, accounts, createManualEntry }
+export default { trialBalance, incomeStatement, balanceSheet, cashFlowStatement, changesInEquity, companyHeader, accounts, createManualEntry }

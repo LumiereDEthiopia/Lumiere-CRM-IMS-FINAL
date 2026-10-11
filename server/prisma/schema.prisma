@@ -1352,19 +1352,6 @@ model JournalLine {
 // Every quantity change writes an ItemMovement (auditable).
 // ============================================================
 
-model ItemCategory {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  items       Item[]
-
-  @@index([isActive])
-}
-
 model Item {
   id              String   @id @default(cuid())
   itemCode        String   @unique
@@ -1394,7 +1381,7 @@ model Item {
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  category       ItemCategory        @relation(fields: [categoryId], references: [id])
+  category       ItemCategory       @relation(fields: [categoryId], references: [id])
   supplier       Supplier?           @relation(fields: [supplierId], references: [id])
   inventories    ItemInventory[]
   movements      ItemMovement[]
@@ -1407,6 +1394,22 @@ model Item {
   @@index([name])
   @@index([isActive])
   @@index([barcode])
+}
+
+// Kept as a separate legacy table to preserve compatibility with existing
+// production item records. Category unification requires a reviewed additive
+// migration strategy before changing this relationship.
+model ItemCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  items       Item[]
+
+  @@index([isActive])
 }
 
 model ItemInventory {

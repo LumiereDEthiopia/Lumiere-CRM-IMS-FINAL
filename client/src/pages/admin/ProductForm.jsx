@@ -4,12 +4,14 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import api from '../../services/api.js'
+import { pureOilConsumptionLabel } from '../../lib/pureOil.js'
 import './admin-styles.css'
 
 function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems }) {
   const emptyForm = {
     name: '', slug: '', description: '', shortDescription: '',
     brandId: '', categoryId: '', gender: '', productType: 'PERFUME', price: '', price100ml: '', compareAtPrice: '',
+    costPrice: '',
     stockQuantity: '', stock50ml: '', stock100ml: '', sku: '', size: '', concentration: '',
     year: '', country: '', isActive: true, isFeatured: false,
     isNew: false, isLuxury: false,
@@ -22,6 +24,10 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
   const [pureOils, setPureOils] = useState([])
   const [showPureOilPicker, setShowPureOilPicker] = useState(false)
   const [pureOilSearch, setPureOilSearch] = useState('')
+  const [showCreatePureOil, setShowCreatePureOil] = useState(false)
+  const [creatingPureOil, setCreatingPureOil] = useState(false)
+  const [pureOilCreateError, setPureOilCreateError] = useState('')
+  const [pureOilDraft, setPureOilDraft] = useState({ name: '', brandId: '', size: '', costPrice: '', stockQuantity: '', sku: '' })
 
   // "Inventory Items Used" — components consumed when this product is sold
   const [itemsUsed, setItemsUsed] = useState(
@@ -88,6 +94,52 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
     }))
     setShowPureOilPicker(false)
     setPureOilSearch('')
+  }
+
+  const updatePureOilDraft = (key, value) => setPureOilDraft((prev) => ({ ...prev, [key]: value }))
+
+  const openCreatePureOil = () => {
+    setPureOilDraft((prev) => ({ ...prev, brandId: prev.brandId || form.brandId || '' }))
+    setPureOilCreateError('')
+    setShowCreatePureOil(true)
+  }
+
+  const handleCreatePureOil = async () => {
+    const name = pureOilDraft.name.trim()
+    const size = pureOilDraft.size.trim()
+    const sizeMatch = size.match(/^(\d+(?:\.\d+)?)\s*ml$/i)
+    const costPrice = Number(pureOilDraft.costPrice)
+    const stockQuantity = pureOilDraft.stockQuantity === '' ? 0 : Number(pureOilDraft.stockQuantity)
+    if (!name || !pureOilDraft.brandId || !sizeMatch || Number(sizeMatch[1]) <= 0 || pureOilDraft.costPrice === '' || !Number.isFinite(costPrice) || costPrice < 0 || !Number.isFinite(stockQuantity) || stockQuantity < 0) {
+      setPureOilCreateError('Enter a name, brand, size in ml, valid total cost, and non-negative opening stock.')
+      return
+    }
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'pure-oil'
+    setCreatingPureOil(true)
+    setPureOilCreateError('')
+    try {
+      const response = await api.post('/api/products', {
+        name,
+        slug,
+        brandId: pureOilDraft.brandId,
+        productType: 'PURE_OIL',
+        size,
+        costPrice,
+        stockQuantity,
+        price: 0,
+        sku: pureOilDraft.sku.trim() || undefined,
+        isActive: true
+      })
+      const oil = response.data?.data || response.data
+      if (!oil?.id) throw new Error('Pure Oil was saved, but its product details could not be loaded.')
+      selectPureOil(oil)
+      setShowCreatePureOil(false)
+      setPureOilDraft({ name: '', brandId: '', size: '', costPrice: '', stockQuantity: '', sku: '' })
+    } catch (error) {
+      setPureOilCreateError(error.data?.message || error.message || 'Could not create the Pure Oil product.')
+    } finally {
+      setCreatingPureOil(false)
+    }
   }
 
   useEffect(() => {
@@ -158,6 +210,7 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
           <Field label="Price (ETB) *" type="number" value={form.price} onChange={(v) => set('price', v)} placeholder={isGram ? 'per gram' : 'per bottle'} />
         )}
         <Field label="Compare Price" type="number" value={form.compareAtPrice} onChange={(v) => set('compareAtPrice', v)} />
+        <Field label="Cost Price (ETB)" type="number" value={form.costPrice} onChange={(v) => set('costPrice', v)} placeholder="cost per unit (used for profit reports)" />
         {isPerfume ? (
           <>
             <Field label="Stock 50ml (bottles)" type="number" value={form.stock50ml} onChange={(v) => set('stock50ml', v)} placeholder="number of 50ml bottles" />
@@ -174,7 +227,13 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
             </div>
           </>
         ) : (
-          <Field label="Stock (grams)" type="number" value={form.stockQuantity} onChange={(v) => set('stockQuantity', v)} placeholder="grams in stock" />
+          <Field
+            label={isMusk ? 'Stock (units)' : isCream ? 'Stock (units)' : 'Stock (grams)'}
+            type="number"
+            value={form.stockQuantity}
+            onChange={(v) => set('stockQuantity', v)}
+            placeholder={isMusk ? 'units in stock' : isCream ? 'units in stock' : 'grams in stock'}
+          />
         )}
         <Field label="SKU" value={form.sku} onChange={(v) => set('sku', v)} />
         <p className="page-subtitle full-width">Leave SKU blank to generate the configured code prefix automatically. You can also enter a custom code.</p>
@@ -219,13 +278,41 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
                   style={{ flex: 1, padding: '0.45rem', border: '1px solid #ddd', borderRadius: 6, background: '#f7f7f9' }}
                 />
                 <button type="button" className="btn-secondary" onClick={() => { setShowPureOilPicker(true); setPureOilSearch('') }}>Select</button>
+                <button type="button" className="btn-secondary" onClick={openCreatePureOil}>+ Add Pure Oil</button>
               </div>
               {form.pureOilProductId && (
                 <p style={{ margin: '0.25rem 0 0', fontSize: '0.7rem', color: '#6b7280' }}>
-                  Stock: {Number(form.pureOilStock).toLocaleString()} g · Consumption: {form.size === '50 ml' ? '6 ml per unit' : '4 ml per unit'}
+                  Stock: {Number(form.pureOilStock).toLocaleString()} ml · Consumption: {pureOilConsumptionLabel(form.size) || '—'} (automatic, set by the backend)
                 </p>
               )}
             </div>
+            {showCreatePureOil && (
+              <div className="form-field full-width" style={{ border: '1px solid #ddd', borderRadius: 8, padding: '0.85rem', background: '#fafafa' }}>
+                <strong style={{ display: 'block', marginBottom: '0.5rem' }}>Create and link a Pure Oil</strong>
+                <p style={{ margin: '0 0 0.75rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                  This saves a regular Pure Oil product immediately, then selects it for this Cream/Jelly. Enter the total cost for the stated bottle size; stock is recorded in ml.
+                </p>
+                <div className="form-grid">
+                  <Field label="Pure Oil name *" value={pureOilDraft.name} onChange={(v) => updatePureOilDraft('name', v)} />
+                  <div className="form-field">
+                    <label>Brand *</label>
+                    <select value={pureOilDraft.brandId} onChange={(e) => updatePureOilDraft('brandId', e.target.value)}>
+                      <option value="">Select brand...</option>
+                      {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+                    </select>
+                  </div>
+                  <Field label="Bottle size (ml) *" value={pureOilDraft.size} onChange={(v) => updatePureOilDraft('size', v)} placeholder="e.g. 100 ml" />
+                  <Field label="Total cost (ETB) *" type="number" value={pureOilDraft.costPrice} onChange={(v) => updatePureOilDraft('costPrice', v)} placeholder="cost for the full size" />
+                  <Field label="Opening stock (ml)" type="number" value={pureOilDraft.stockQuantity} onChange={(v) => updatePureOilDraft('stockQuantity', v)} placeholder="0" />
+                  <Field label="SKU (optional)" value={pureOilDraft.sku} onChange={(v) => updatePureOilDraft('sku', v)} />
+                </div>
+                {pureOilCreateError && <p role="alert" style={{ color: '#b42318', fontSize: '0.8rem', margin: '0.5rem 0 0' }}>{pureOilCreateError}</p>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
+                  <button type="button" className="btn-cancel" disabled={creatingPureOil} onClick={() => setShowCreatePureOil(false)}>Cancel</button>
+                  <button type="button" className="btn-save" disabled={creatingPureOil} onClick={handleCreatePureOil}>{creatingPureOil ? 'Saving...' : 'Save and Select Pure Oil'}</button>
+                </div>
+              </div>
+            )}
           </>
         )}
         {isPerfume ? (
@@ -333,7 +420,7 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
                 <button type="button" key={oil.id} onClick={() => selectPureOil(oil)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem', background: 'none', border: 'none', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}>
                   <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{oil.name} <span style={{ color: '#9a9a9a', fontWeight: 400 }}>({oil.sku})</span></div>
                   <div style={{ fontSize: '0.68rem', color: '#9a9a9a' }}>
-                    Stock: {Number(oil.stockQuantity || 0).toLocaleString()} g
+                    Stock: {Number(oil.stockQuantity || 0).toLocaleString()} ml
                   </div>
                 </button>
               ))}

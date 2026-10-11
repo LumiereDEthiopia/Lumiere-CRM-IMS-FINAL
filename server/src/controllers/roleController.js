@@ -1,13 +1,16 @@
 ﻿/**
  * Role & Permission Controller — Professional ERP role management
  * Provides the role/permission catalog, job-role templates, and CRUD used by
- * Settings → Account Roles. Super Admin and Admin (setting:manage) can grant
+ * Settings → Account Roles. Only the trusted Super Admin session can grant
  * or revoke permissions through the checkbox permission matrix.
  */
-import prisma from '../config/prisma.js'
+import prismaClient from '../config/prisma.js'
 import { ApiError } from '../middleware/errorHandler.js'
 import { createAuditLog } from '../services/auditService.js'
 import { activeSessions } from '../services/authService.js'
+
+let prisma = prismaClient
+export function setRoleControllerPrismaForTests(client) { prisma = client || prismaClient }
 
 /**
  * Permission catalog grouped by business module.
@@ -154,11 +157,8 @@ const ROLE_TEMPLATES = {
 }
 
 const TEMPLATE_ORDER = Object.keys(ROLE_TEMPLATES)
-let catalogEnsured = false
-
-/** Upserts the permission catalog and built-in job-role templates. Idempotent. */
-async function ensureCatalog() {
-  if (catalogEnsured) return
+/** Add missing permission catalog entries without modifying existing role access. */
+async function ensurePermissionCatalog() {
   const permRows = await prisma.permission.findMany({ select: { id: true, name: true } })
   const existing = new Set(permRows.map((p) => p.name))
   for (const name of ALL_PERMISSIONS) {
@@ -167,18 +167,19 @@ async function ensureCatalog() {
       existing.add(name)
     }
   }
-  const allPerms = await prisma.permission.findMany({ select: { id: true, name: true } })
-  const permIdByName = new Map(allPerms.map((p) => [p.name, p.id]))
-  for (const [name, tpl] of Object.entries(ROLE_TEMPLATES)) {
-    const role = await prisma.role.upsert({
-      where: { name },
-      update: { description: tpl.description },
-      create: { name, description: tpl.description }
+}
+
+async function requireSuperAdmin(req) {
+  const tokenRole = req.user?.role
+  const dbUser = req.user?.userId
+    ? await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { isActive: true, role: { select: { name: true } } }
     })
-    const ids = tpl.permissions.map((p) => permIdByName.get(p)).filter(Boolean).map((id) => ({ id }))
-    await prisma.role.update({ where: { id: role.id }, data: { permissions: { set: ids } } })
+    : null
+  if (!dbUser?.isActive || dbUser.role?.name !== 'SUPER_ADMIN' || tokenRole !== 'SUPER_ADMIN') {
+    throw new ApiError(403, 'Only an active Super Admin can manage account roles')
   }
-  catalogEnsured = true
 }
 
 function titleName(name) {
@@ -188,10 +189,12 @@ function titleName(name) {
 }
 export async function listRoles(req, res, next) {
   try {
-    await ensureCatalog()
+    if (!req.user?.userId) throw new ApiError(401, 'Authentication required')
+    await ensurePermissionCatalog()
     const roles = await prisma.role.findMany({
       include: {
         permissions: { select: { name: true } },
+        users: { select: { id: true, name: true, isActive: true }, orderBy: { name: 'asc' } },
         _count: { select: { users: true } }
       },
       orderBy: { name: 'asc' }
@@ -205,7 +208,8 @@ export async function listRoles(req, res, next) {
         permissions: r.permissions.map((p) => p.name).sort(),
         isBuiltin: TEMPLATE_ORDER.includes(r.name),
         sortOrder: TEMPLATE_ORDER.includes(r.name) ? TEMPLATE_ORDER.indexOf(r.name) : 999,
-        userCount: r._count.users
+        userCount: r._count.users,
+        users: r.users
       }))
       .sort((a, b) => (a.sortOrder - b.sortOrder) || a.name.localeCompare(b.name))
     res.json({ success: true, data })
@@ -214,19 +218,20 @@ export async function listRoles(req, res, next) {
 
 export async function listRolePermissions(req, res, next) {
   try {
-    await ensureCatalog()
+    if (!req.user?.userId) throw new ApiError(401, 'Authentication required')
     const exist = await prisma.permission.findMany({ select: { name: true } })
     const names = new Set(exist.map((p) => p.name))
     const modules = Object.entries(PERMISSION_CATALOG).map(([module, perms]) => ({
       module,
-      permissions: perms.map(([name, description]) => ({ name, description, exists: names.has(name) }))
+      permissions: perms.filter(([name]) => names.has(name)).map(([name, description]) => ({ name, description, exists: true }))
     }))
     res.json({ success: true, data: { modules } })
   } catch (e) { next(e) }
 }
 export async function createRole(req, res, next) {
   try {
-    await ensureCatalog()
+    await requireSuperAdmin(req)
+    const existingPermissionNames = new Set((await prisma.permission.findMany({ select: { name: true } })).map((permission) => permission.name))
     const name = String(req.body?.name || '').trim().toUpperCase().replace(/\s+/g, '_')
     if (name.length < 3) throw new ApiError(400, 'Role name is required (min 3 characters)')
     if (TEMPLATE_ORDER.includes(name)) throw new ApiError(409, `"${name}" is a built-in role`)
@@ -234,7 +239,12 @@ export async function createRole(req, res, next) {
     if (exists) throw new ApiError(409, `A role named "${titleName(name)}" already exists`)
 
     const permNames = Array.isArray(req.body?.permissions) ? [...new Set(req.body.permissions)] : []
-    const perms = await prisma.permission.findMany({ where: { name: { in: permNames } }, select: { id: true } })
+    if (permNames.some((permission) => !existingPermissionNames.has(permission))) throw new ApiError(400, 'One or more permissions are not recognized')
+    const perms = await prisma.permission.findMany({ where: { name: { in: permNames } }, select: { id: true, name: true } })
+    if (perms.length !== permNames.length) throw new ApiError(400, 'One or more permissions are not recognized')
+    if (perms.some((permission) => permission.name === 'setting:manage' || permission.name === 'backups:restore')) {
+      throw new ApiError(403, 'Custom roles cannot receive Super Admin-only permissions')
+    }
     const role = await prisma.role.create({
       data: {
         name,
@@ -243,7 +253,7 @@ export async function createRole(req, res, next) {
       }
     })
     await createAuditLog({
-      userId: req.user?.id, action: 'ROLE_CREATE', entity: 'Role', entityId: role.id,
+      userId: req.user?.userId, action: 'ROLE_CREATE', entity: 'Role', entityId: role.id,
       details: { name: role.name, permissions: permNames }
     }).catch(() => {})
     res.status(201).json({ success: true, data: role })
@@ -252,16 +262,18 @@ export async function createRole(req, res, next) {
 
 export async function updateRole(req, res, next) {
   try {
-    await ensureCatalog()
+    await requireSuperAdmin(req)
     const role = await prisma.role.findUnique({ where: { id: req.params.id } })
     if (!role) throw new ApiError(404, 'Role not found')
-    if (role.name === 'SUPER_ADMIN') throw new ApiError(400, 'The Super Admin role cannot be modified — it always holds every permission.')
+    if (TEMPLATE_ORDER.includes(role.name)) throw new ApiError(400, `The protected ${titleName(role.name)} role cannot be modified`)
 
     const data = {}
     if (req.body?.description !== undefined) data.description = String(req.body.description).trim()
     if (Array.isArray(req.body?.permissions)) {
       const permNames = [...new Set(req.body.permissions)]
-      const perms = await prisma.permission.findMany({ where: { name: { in: permNames } }, select: { id: true } })
+      const perms = await prisma.permission.findMany({ where: { name: { in: permNames } }, select: { id: true, name: true } })
+      if (perms.length !== permNames.length) throw new ApiError(400, 'One or more permissions are not recognized')
+      if (perms.some((permission) => permission.name === 'setting:manage' || permission.name === 'backups:restore')) throw new ApiError(403, 'Only protected system roles may hold these elevated permissions')
       data.permissions = { set: perms.map((p) => ({ id: p.id })) }
     }
     const updated = await prisma.role.update({
@@ -270,22 +282,15 @@ export async function updateRole(req, res, next) {
       include: { permissions: { select: { name: true } } }
     })
 
-    // Refresh permissions for all active sessions with this role
-    for (const [token, session] of activeSessions.entries()) {
-      const user = await prisma.user.findUnique({
-        where: { id: session.userId },
-        include: { role: { include: { permissions: true } } }
-      })
-      if (user && user.roleId === role.id) {
-        const permissions = user.role?.permissions?.map((p) => p.name) || []
-        const roleName = user.role?.name || 'STAFF'
-        session.permissions = permissions
-        session.role = roleName
-      }
+    // Refresh sessions from the persisted assignment; changing role access
+    // must affect existing sessions immediately, including revocations.
+    for (const session of activeSessions.values()) {
+      const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { roleId: true } })
+      if (user?.roleId === role.id) session.permissions = updated.permissions.map((permission) => permission.name)
     }
 
     await createAuditLog({
-      userId: req.user?.id, action: 'ROLE_PERMISSIONS_UPDATE', entity: 'Role', entityId: role.id,
+      userId: req.user?.userId, action: 'ROLE_PERMISSIONS_UPDATE', entity: 'Role', entityId: role.id,
       details: { name: role.name, permissions: updated.permissions.map((p) => p.name) }
     }).catch(() => {})
     res.json({ success: true, data: updated })
@@ -294,6 +299,7 @@ export async function updateRole(req, res, next) {
 
 export async function deleteRole(req, res, next) {
   try {
+    await requireSuperAdmin(req)
     const role = await prisma.role.findUnique({
       where: { id: req.params.id },
       include: { _count: { select: { users: true } } }
@@ -303,7 +309,7 @@ export async function deleteRole(req, res, next) {
     if (role._count.users > 0) throw new ApiError(400, `Role is assigned to ${role._count.users} account(s) and cannot be deleted`)
     await prisma.role.delete({ where: { id: role.id } })
     await createAuditLog({
-      userId: req.user?.id, action: 'ROLE_DELETE', entity: 'Role', entityId: role.id,
+      userId: req.user?.userId, action: 'ROLE_DELETE', entity: 'Role', entityId: role.id,
       details: { name: role.name }
     }).catch(() => {})
     res.json({ success: true, data: { id: role.id } })

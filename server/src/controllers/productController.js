@@ -4,12 +4,33 @@
 import prisma from '../config/prisma.js'
 import { ApiError } from '../middleware/errorHandler.js'
 import { isPerfume, offeredSizes } from '../services/sizeStockService.js'
+import { creamSizeLabel } from '../services/pureOilService.js'
 import { normalizeProductPayload } from '../lib/normalizers.js'
 import { setProductItems } from '../services/itemService.js'
 
 // Size comparison helper — treats null / '' as the same ("no size set")
 function normalizeSize(size) {
   return String(size || '').trim().toLowerCase()
+}
+
+/**
+ * Backend price/quantity validation for Musk / Cream-Jelly edits (spec §16).
+ * Values fall back to the existing row when not present in the payload so a
+ * partial update never trips a false error.
+ */
+function validateTypePrices(typeLabel, body, existing) {
+  const priceRaw = body.price !== undefined ? body.price : existing.price
+  const priceNum = priceRaw === '' || priceRaw === null || priceRaw === undefined ? NaN : parseFloat(priceRaw)
+  if (!Number.isFinite(priceNum) || priceNum < 0) {
+    throw new ApiError(400, `Selling price must be a valid amount for ${typeLabel} products`)
+  }
+  const costRaw = body.costPrice !== undefined ? body.costPrice : existing.costPrice
+  if (costRaw !== undefined && costRaw !== null && costRaw !== '') {
+    const costNum = parseFloat(costRaw)
+    if (!Number.isFinite(costNum) || costNum < 0) {
+      throw new ApiError(400, `Cost price must be a valid amount for ${typeLabel} products`)
+    }
+  }
 }
 
 /**
@@ -65,6 +86,8 @@ export async function listProducts(req, res, next) {
     const {
       page = 1, limit = 20, search, brandId, categoryId,
       gender, productType, isActive, isFeatured, isNew, isLuxury,
+      // Musk / Cream-Jelly filters (spec §14)
+      flavor, form, size, pureOilProductId,
       sortBy = 'createdAt', sortOrder = 'desc'
     } = req.query
 
@@ -74,16 +97,24 @@ export async function listProducts(req, res, next) {
 
     const where = {}
     if (search) {
+      // Search covers name / slug / SKU, plus Musk flavor and Cream form so a
+      // staff member can find "Oud Rose" or "JELLY" from one box (spec §14).
       where.OR = [
-        { name: { contains: search } },
-        { slug: { contains: search } },
-        { sku: { contains: search } }
+        { name: { contains: search, mode: 'insensitive' } },
+        { slug: { contains: search, mode: 'insensitive' } },
+        { sku: { contains: search, mode: 'insensitive' } },
+        { flavor: { contains: search, mode: 'insensitive' } },
+        { form: { contains: search, mode: 'insensitive' } }
       ]
     }
     if (brandId) where.brandId = brandId
     if (categoryId) where.categoryId = categoryId
     if (gender) where.gender = gender
     if (productType) where.productType = productType
+    if (flavor) where.flavor = { contains: flavor, mode: 'insensitive' }
+    if (form) where.form = form
+    if (size) where.size = { contains: size, mode: 'insensitive' }
+    if (pureOilProductId) where.pureOilProductId = pureOilProductId
     if (isActive !== undefined) where.isActive = isActive === 'true'
     if (isFeatured !== undefined) where.isFeatured = isFeatured === 'true'
     if (isNew !== undefined) where.isNew = isNew === 'true'
@@ -95,6 +126,9 @@ export async function listProducts(req, res, next) {
         include: {
           brand: { select: { id: true, name: true, slug: true } },
           category: { select: { id: true, name: true, slug: true } },
+          // Linked Pure Oil for Cream/Jelly rows — name + code + live stock so
+          // the list/edit screens can show it without a second request.
+          pureOilSource: { select: { id: true, name: true, sku: true, stockQuantity: true, size: true, costPrice: true } },
           images: { orderBy: { sortOrder: 'asc' } },
           inventory: { select: { locationId: true, quantity: true, availableQuantity: true } },
           _count: { select: { saleItems: true } }
@@ -132,6 +166,9 @@ export async function getProduct(req, res, next) {
         images: { orderBy: { sortOrder: 'asc' } },
         accords: { include: { accord: true }, orderBy: { sortOrder: 'asc' } },
         notes: { include: { fragranceNote: true }, orderBy: { sortOrder: 'asc' } },
+        // Linked Pure Oil for Cream/Jelly — name, code and live stock shown in
+        // the edit form after selection (spec §4).
+        pureOilSource: { select: { id: true, name: true, sku: true, stockQuantity: true, size: true, costPrice: true, productType: true } },
         productItems: {
           include: {
             item: { select: { id: true, itemCode: true, name: true, size: true, color: true, unit: true, isActive: true, category: { select: { id: true, name: true } } } }
@@ -154,6 +191,7 @@ export async function createProduct(req, res, next) {
       name, slug, description, shortDescription,
       brandId, categoryId,
       gender, productType, price, price100ml, compareAtPrice,
+      costPrice,
       stockQuantity, stock50ml, stock100ml,
       sku, size,
       concentration, year, country,
@@ -168,20 +206,47 @@ export async function createProduct(req, res, next) {
       throw new ApiError(400, 'Name, slug, and brandId are required')
     }
 
-    // Musk validation: flavor required, volume always 3 ml
+    // Backend price/quantity validation for the new product types (spec §16) —
+    // frontend validation alone is never trusted.
+    const validateNewTypeMoneyAndStock = (typeLabel) => {
+      const priceNum = price === '' || price === null || price === undefined ? NaN : parseFloat(price)
+      if (!Number.isFinite(priceNum) || priceNum < 0) {
+        throw new ApiError(400, `Selling price must be a valid amount for ${typeLabel} products`)
+      }
+      const costNum = costPrice === '' || costPrice === null || costPrice === undefined ? 0 : parseFloat(costPrice)
+      if (!Number.isFinite(costNum) || costNum < 0) {
+        throw new ApiError(400, `Cost price must be a valid amount for ${typeLabel} products`)
+      }
+      const qtyRaw = stockQuantity ?? stock50ml ?? stock100ml
+      if (qtyRaw !== undefined && qtyRaw !== null && qtyRaw !== '') {
+        const qtyNum = parseFloat(qtyRaw)
+        if (!Number.isFinite(qtyNum) || qtyNum < 0) {
+          throw new ApiError(400, `Quantity must be a valid amount for ${typeLabel} products`)
+        }
+      }
+      return { priceNum, costNum }
+    }
+
+    // Musk validation: flavor required, volume always 3 ml, prices valid
     if (productType === 'MUSK') {
       if (!flavor || flavor.trim() === '') {
         throw new ApiError(400, 'Flavor is required for Musk products')
       }
+      validateNewTypeMoneyAndStock('Musk')
     }
 
-    // Cream/Jelly validation: form, size, and Pure Oil link required
+    // Cream/Jelly validation: form, size, and Pure Oil link required.
+    // NOTE: Pure Oil is NOT deducted here. Consumption happens at SALE time
+    // (see saleService.js + pureOilService.js) so registering a Cream/Jelly
+    // product never moves Pure Oil stock — matching the business rule that
+    // only an actual sale consumes Pure Oil.
     if (productType === 'CREAM') {
       if (!form || (form !== 'CREAM' && form !== 'JELLY')) {
         throw new ApiError(400, 'Form must be CREAM or JELLY for Cream/Jelly products')
       }
-      if (!size || (size !== '30 ml' && size !== '50 ml')) {
-        throw new ApiError(400, 'Size must be 30 ml or 50 ml for Cream/Jelly products')
+      const creamSize = creamSizeLabel(size)
+      if (!creamSize) {
+        throw new ApiError(400, 'Cream/Jelly size must be 30 ml or 50 ml')
       }
       if (!pureOilProductId) {
         throw new ApiError(400, 'Please select a Pure Oil product for Cream/Jelly products')
@@ -197,6 +262,7 @@ export async function createProduct(req, res, next) {
       if (pureOil.productType !== 'PURE_OIL') {
         throw new ApiError(400, 'Selected product is not a valid Pure Oil product')
       }
+      validateNewTypeMoneyAndStock('Cream/Jelly')
     }
 
     // Auto-uniquify the slug so the same perfume can be entered twice —
@@ -216,6 +282,11 @@ export async function createProduct(req, res, next) {
       }
     }
 
+    // Musk volume is FIXED at 3 ml (spec §3) — enforced server-side so no
+    // client can register a Musk at any other size.
+    const effectiveType = productType === '' ? 'PERFUME' : productType
+    const effectiveSize = effectiveType === 'MUSK' ? '3 ml' : size
+
     const product = await prisma.product.create({
       data: {
         name,
@@ -225,13 +296,15 @@ export async function createProduct(req, res, next) {
         brandId,
         categoryId: categoryId === '' ? null : categoryId,
         gender: gender === '' ? null : gender,
-        productType: productType === '' ? 'PERFUME' : productType,
+        productType: effectiveType,
         price: parseFloat(price) || 0,
         price100ml: price100ml != null && price100ml !== '' ? parseFloat(price100ml) : null,
         compareAtPrice: compareAtPrice ? parseFloat(compareAtPrice) : null,
-        ...resolveProductStock({ productType: productType === '' ? 'PERFUME' : productType, size, stockQuantity, stock50ml, stock100ml }),
-        sku: sku || await generateProductCode({ productType: productType === '' ? 'PERFUME' : productType, gender }),
-        size: size === '' ? null : size,
+        // Real cost (spec §9) — profit reports always use revenue − actual COGS.
+        costPrice: costPrice === undefined || costPrice === null || costPrice === '' ? 0 : (parseFloat(costPrice) || 0),
+        ...resolveProductStock({ productType: effectiveType, size: effectiveSize, stockQuantity, stock50ml, stock100ml }),
+        sku: sku || await generateProductCode({ productType: effectiveType, gender }),
+        size: effectiveType === 'MUSK' ? '3 ml' : (effectiveSize === '' ? null : effectiveSize),
         concentration: concentration === '' ? null : concentration,
         year: year ? parseInt(year) : null,
         country: country === '' ? null : country,
@@ -276,47 +349,10 @@ export async function createProduct(req, res, next) {
       await setProductItems(product.id, normalized.productItems, req.user?.id)
     }
 
-    // For Cream/Jelly products, deduct Pure Oil during manufacturing
-    if (productType === 'CREAM' && pureOilProductId) {
-      const stockToCreate = resolveProductStock({ productType, size, stockQuantity, stock50ml, stock100ml }).stockQuantity
-      const consumptionRate = size === '50 ml' ? 6 : 4 // 50ml uses 6ml, 30ml uses 4ml
-      const pureOilToDeduct = stockToCreate * consumptionRate
-
-      // Validate Pure Oil stock
-      const pureOil = await prisma.product.findUnique({
-        where: { id: pureOilProductId },
-        select: { id: true, name: true, stockQuantity: true }
-      })
-
-      if (!pureOil) {
-        throw new ApiError(400, 'Pure Oil product not found')
-      }
-
-      if (pureOil.stockQuantity < pureOilToDeduct) {
-        throw new ApiError(400, `Insufficient Pure Oil stock. Required: ${pureOilToDeduct} ml, Available: ${pureOil.stockQuantity} ml`)
-      }
-
-      // Deduct Pure Oil in a transaction
-      await prisma.$transaction([
-        // Update Pure Oil stock
-        prisma.product.update({
-          where: { id: pureOilProductId },
-          data: { stockQuantity: { decrement: pureOilToDeduct } }
-        }),
-        // Create stock movement for Pure Oil deduction
-        prisma.stockMovement.create({
-          data: {
-            productId: pureOilProductId,
-            quantity: -pureOilToDeduct,
-            type: 'CREAM_MANUFACTURING',
-            reason: `Manufactured ${stockToCreate} units of ${product.name} (${size})`,
-            referenceId: product.id,
-            referenceType: 'PRODUCT',
-            userId: req.user?.id || null
-          }
-        })
-      ])
-    }
+    // Pure Oil is consumed when a Cream/Jelly unit is SOLD, not when the
+    // product is registered. The atomic deduction + stock movement + audit
+    // live in the sales transaction (saleService.js → pureOilService.js).
+    // Registering the product therefore never touches Pure Oil stock.
 
     res.status(201).json({ success: true, data: product })
   } catch (error) {
@@ -352,6 +388,7 @@ export async function updateProduct(req, res, next) {
       if (!nextFlavor || nextFlavor.trim() === '') {
         throw new ApiError(400, 'Flavor is required for Musk products')
       }
+      validateTypePrices(nextProductType, body, existing)
     }
 
     // Cream/Jelly validation: form, size, and Pure Oil link required
@@ -363,8 +400,8 @@ export async function updateProduct(req, res, next) {
       if (!nextForm || (nextForm !== 'CREAM' && nextForm !== 'JELLY')) {
         throw new ApiError(400, 'Form must be CREAM or JELLY for Cream/Jelly products')
       }
-      if (!nextSize || (nextSize !== '30 ml' && nextSize !== '50 ml')) {
-        throw new ApiError(400, 'Size must be 30 ml or 50 ml for Cream/Jelly products')
+      if (!creamSizeLabel(nextSize)) {
+        throw new ApiError(400, 'Cream/Jelly size must be 30 ml or 50 ml')
       }
       if (!nextPureOilId) {
         throw new ApiError(400, 'Please select a Pure Oil product for Cream/Jelly products')
@@ -380,6 +417,7 @@ export async function updateProduct(req, res, next) {
       if (pureOil.productType !== 'PURE_OIL') {
         throw new ApiError(400, 'Selected product is not a valid Pure Oil product')
       }
+      validateTypePrices(nextProductType, body, existing)
     }
 
     // Stock boxes: the per-size values are the source of truth and the total
@@ -416,9 +454,13 @@ export async function updateProduct(req, res, next) {
         ...(normalized.price !== undefined && { price: parseFloat(normalized.price) || 0 }),
         ...(normalized.price100ml !== undefined && { price100ml: normalized.price100ml != null && normalized.price100ml !== '' ? parseFloat(normalized.price100ml) : null }),
         ...(normalized.compareAtPrice !== undefined && { compareAtPrice: normalized.compareAtPrice ? parseFloat(normalized.compareAtPrice) : null }),
+        // Real cost (spec §9) — profit reports always use revenue − actual COGS.
+        ...(normalized.costPrice !== undefined && { costPrice: normalized.costPrice === '' || normalized.costPrice === null ? 0 : (parseFloat(normalized.costPrice) || 0) }),
         ...(stockFields || {}),
         ...(normalized.sku !== undefined && { sku: normalized.sku }),
-        ...(normalized.size !== undefined && { size: normalized.size === '' ? null : normalized.size }),
+        // Musk size stays FIXED at 3 ml even if the payload tries to change it (spec §3).
+        ...(nextProductType === 'MUSK' && { size: '3 ml' }),
+        ...(normalized.size !== undefined && { size: nextProductType === 'MUSK' ? '3 ml' : (normalized.size === '' ? null : normalized.size) }),
         ...(normalized.concentration !== undefined && { concentration: normalized.concentration === '' ? null : normalized.concentration }),
         ...(normalized.year !== undefined && { year: normalized.year ? parseInt(normalized.year) : null }),
         ...(normalized.country !== undefined && { country: normalized.country === '' ? null : normalized.country }),

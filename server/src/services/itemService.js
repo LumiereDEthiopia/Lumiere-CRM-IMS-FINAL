@@ -20,54 +20,62 @@ const toNum = (value) => {
 }
 
 // ============================ Categories ============================
+// Items now share the same Category records as Products and the
+// /admin/categories page. The /api/item-categories endpoints are kept as a
+// thin, backward-compatible alias over Category so existing inventory pages
+// (category tabs, "+ Category") keep working with the same IDs.
+
+const slugify = (value) => String(value || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'category'
 
 export async function listItemCategories({ includeInactive = false } = {}) {
-  return prisma.itemCategory.findMany({
+  return prisma.category.findMany({
     where: includeInactive ? {} : { isActive: true },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-    include: { _count: { select: { items: true } } }
+    include: { _count: { select: { items: true, products: true } } }
   })
 }
 
 export async function createItemCategory({ name, description, sortOrder, isActive = true }, userId) {
   const clean = String(name || '').trim()
   if (!clean) throw new ApiError(400, 'Category name is required')
-  const exists = await prisma.itemCategory.findFirst({ where: { name: clean }, select: { id: true } })
+  const exists = await prisma.category.findFirst({ where: { name: clean }, select: { id: true } })
   if (exists) throw new ApiError(400, 'A category with this name already exists')
-  const category = await prisma.itemCategory.create({
-    data: { name: clean, description: description || null, sortOrder: parseInt(sortOrder) || 0, isActive: isActive !== false }
+  let slug = slugify(clean)
+  if (await prisma.category.findUnique({ where: { slug } })) slug = `${slug}-${Date.now().toString(36)}`
+  const category = await prisma.category.create({
+    data: { name: clean, slug, description: description || null, sortOrder: parseInt(sortOrder) || 0, isActive: isActive !== false }
   })
-  await createAuditLog({ userId, action: 'ITEM_CATEGORY_CREATED', entity: 'ItemCategory', entityId: category.id, details: { name: clean } })
+  await createAuditLog({ userId, action: 'ITEM_CATEGORY_CREATED', entity: 'Category', entityId: category.id, details: { name: clean } })
   return category
 }
 
 export async function updateItemCategory(id, data, userId) {
-  const category = await prisma.itemCategory.findUnique({ where: { id } })
+  const category = await prisma.category.findUnique({ where: { id } })
   if (!category) throw new ApiError(404, 'Category not found')
   const payload = {}
   if (data.name !== undefined) {
     const clean = String(data.name).trim()
     if (!clean) throw new ApiError(400, 'Category name is required')
-    const dupe = await prisma.itemCategory.findFirst({ where: { name: clean, id: { not: id } }, select: { id: true } })
+    const dupe = await prisma.category.findFirst({ where: { name: clean, id: { not: id } }, select: { id: true } })
     if (dupe) throw new ApiError(400, 'A category with this name already exists')
     payload.name = clean
   }
   if (data.description !== undefined) payload.description = data.description || null
   if (data.sortOrder !== undefined) payload.sortOrder = parseInt(data.sortOrder) || 0
   if (data.isActive !== undefined) payload.isActive = data.isActive === true || data.isActive === 'true'
-  const updated = await prisma.itemCategory.update({ where: { id }, data: payload })
-  await createAuditLog({ userId, action: 'ITEM_CATEGORY_UPDATED', entity: 'ItemCategory', entityId: id, details: payload })
+  const updated = await prisma.category.update({ where: { id }, data: payload })
+  await createAuditLog({ userId, action: 'ITEM_CATEGORY_UPDATED', entity: 'Category', entityId: id, details: payload })
   return updated
 }
 
 export async function deleteItemCategory(id, userId) {
-  const category = await prisma.itemCategory.findUnique({ where: { id }, include: { _count: { select: { items: true } } } })
+  const category = await prisma.category.findUnique({ where: { id }, include: { _count: { select: { items: true, products: true } } } })
   if (!category) throw new ApiError(404, 'Category not found')
-  if (category._count.items > 0) {
-    throw new ApiError(400, `Category has ${category._count.items} item(s) — deactivate it instead of deleting`)
+  if (category._count.items > 0 || category._count.products > 0) {
+    throw new ApiError(400, 'Category is in use — deactivate it instead of deleting')
   }
-  await prisma.itemCategory.delete({ where: { id } })
-  await createAuditLog({ userId, action: 'ITEM_CATEGORY_DELETED', entity: 'ItemCategory', entityId: id, details: { name: category.name } })
+  await prisma.category.delete({ where: { id } })
+  await createAuditLog({ userId, action: 'ITEM_CATEGORY_DELETED', entity: 'Category', entityId: id, details: { name: category.name } })
   return { success: true }
 }
 
@@ -173,7 +181,7 @@ export async function createItem(data, userId) {
   if (!String(name || '').trim()) throw new ApiError(400, 'Item name is required')
   if (!String(itemCode || '').trim()) throw new ApiError(400, 'Item code is required')
   if (!categoryId) throw new ApiError(400, 'Category is required')
-  const category = await prisma.itemCategory.findUnique({ where: { id: categoryId } })
+  const category = await prisma.category.findUnique({ where: { id: categoryId } })
   if (!category) throw new ApiError(400, 'Invalid category')
   const dupe = await prisma.item.findFirst({ where: { itemCode: String(itemCode).trim() }, select: { id: true } })
   if (dupe) throw new ApiError(400, `Item code "${itemCode}" is already used`)
@@ -248,7 +256,7 @@ export async function updateItem(id, data, userId) {
     if (data[field] === undefined) continue
     if (field === 'name' && !String(data.name).trim()) throw new ApiError(400, 'Item name is required')
     if (field === 'categoryId') {
-      const category = await prisma.itemCategory.findUnique({ where: { id: data.categoryId } })
+      const category = await prisma.category.findUnique({ where: { id: data.categoryId } })
       if (!category) throw new ApiError(400, 'Invalid category')
     }
     if (['costPrice', 'minimumStock', 'reorderQuantity'].includes(field)) payload[field] = toNum(data[field])
@@ -757,7 +765,7 @@ export async function removeProductItemRow(productId, itemId, userId) {
 export async function getItemStats() {
   const [totalItems, categories, lowRows, outRows, units] = await Promise.all([
     prisma.item.count({ where: { isActive: true } }),
-    prisma.itemCategory.findMany({
+    prisma.category.findMany({
       where: { isActive: true },
       include: { _count: { select: { items: { where: { isActive: true } } } } },
       orderBy: { sortOrder: 'asc' }

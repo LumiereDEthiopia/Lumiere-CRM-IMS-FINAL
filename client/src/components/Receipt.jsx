@@ -61,6 +61,9 @@ export default function Receipt({ data }) {
         <div><span>Status</span><strong>{data.status || 'COMPLETED'}</strong></div>
         <div><span>Sales Section</span><strong>{data.salesChannel || 'DIRECT'}</strong></div>
         <div><span>Payment Method</span><strong>{data.paymentMethod || '-'}</strong></div>
+        {data.soldByEmployee && (
+          <div><span>Sold By</span><strong>{`${data.soldByEmployee.firstName || ''} ${data.soldByEmployee.lastName || ''}`.trim()}{data.soldByEmployee.employeeCode ? ` (${data.soldByEmployee.employeeCode})` : ''}</strong></div>
+        )}
       </section>
       </section>
 
@@ -133,6 +136,22 @@ export default function Receipt({ data }) {
         {changeAmount != null && <div><span>Change</span><strong>{etb(changeAmount)}</strong></div>}
       </section>
       </section>
+
+      {/* Pure Oil consumed by Cream/Jelly in this sale — read-only, informational.
+          This is an inventory/cost movement, NOT customer revenue or a charge. */}
+      {Array.isArray(data.pureOilConsumption) && data.pureOilConsumption.length > 0 && (
+        <section className="receipt-section">
+          <h3 className="receipt-section-title">Pure Oil Consumption (internal)</h3>
+          <section className="receipt-summary">
+            {data.pureOilConsumption.map((c, i) => (
+              <div key={c.pureOilProductId || i}>
+                <span>{c.pureOilName || 'Pure Oil'}</span>
+                <strong>{Number(c.consumedMl || 0)} ml consumed</strong>
+              </div>
+            ))}
+          </section>
+        </section>
+      )}
 
       {(data.customerRegistrationNote || data.notes) && <section className="receipt-notes">{data.customerRegistrationNote && <p><strong>Customer note:</strong> {data.customerRegistrationNote}</p>}{data.notes && <p><strong>Notes:</strong> {data.notes}</p>}</section>}
 

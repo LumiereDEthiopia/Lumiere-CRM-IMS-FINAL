@@ -24,14 +24,14 @@ function checkSensitiveWrite(req) {
 export async function createNewEmployee(req, res, next) {
   try {
     checkSensitiveWrite(req)
-    const employee = await createEmployee(req.body, req.user?.userId || (req.userId || req.user?.userId || req.user?.id))
+    const employee = await createEmployee(req.body, req.user?.userId || (req.userId || req.user?.userId || req.user?.id), req.user)
     res.status(201).json({ success: true, data: maskEmployee(employee, canViewSensitive(req.user)) })
   } catch (e) { next(e) }
 }
 export async function updateExistingEmployee(req, res, next) {
   try {
     checkSensitiveWrite(req)
-    const employee = await updateEmployee(req.params.id, req.body, req.user?.userId || (req.userId || req.user?.userId || req.user?.id))
+    const employee = await updateEmployee(req.params.id, req.body, req.user?.userId || (req.userId || req.user?.userId || req.user?.id), req.user)
     res.json({ success: true, data: maskEmployee(employee, canViewSensitive(req.user)) })
   } catch (e) { next(e) }
 }

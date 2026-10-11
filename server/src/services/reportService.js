@@ -234,24 +234,40 @@ prisma.$queryRawUnsafe(`
   }
 }
 
-export async function getSalesReport({ startDate, endDate, locationId, customerId, productId, brandId, categoryId }) {
+export async function getSalesReport({
+  startDate, endDate, locationId, customerId, productId, brandId, categoryId,
+  productType, form, flavor, size, paymentMethod, soldByEmployeeId
+}) {
   const where = { status: { not: 'CANCELLED' }, ...dateRange(startDate, endDate) }
   if (locationId) where.locationId = locationId
   if (customerId) where.customerId = customerId
+  if (paymentMethod) where.paymentMethod = paymentMethod
+  // Sold By / Employee filter (spec §13) — restricts the whole report to one salesperson.
+  if (soldByEmployeeId) where.soldByEmployeeId = soldByEmployeeId
 
   let productFilter = null
-  if (productId || brandId || categoryId) {
+  if (productId || brandId || categoryId || productType || form || flavor || size) {
     productFilter = {}
     if (productId) productFilter.id = productId
     if (brandId) productFilter.brandId = brandId
     if (categoryId) productFilter.categoryId = categoryId
+    // Product type / Cream-Jelly form / Musk flavor filters (spec §13/§14).
+    if (productType) productFilter.productType = productType
+    if (form) productFilter.form = form
+    if (flavor) productFilter.flavor = { contains: flavor, mode: 'insensitive' }
+    if (size) productFilter.size = { contains: size, mode: 'insensitive' }
   }
 
   const [summary, recentSales, byLocation, discountByEmployeeRaw, discountByBranchRaw, giftItems] = await Promise.all([
     prisma.sale.aggregate({ where, _sum: { total: true, discount: true, subtotal: true, vatAmount: true }, _count: true, _avg: { total: true } }),
     prisma.sale.findMany({
       where,
-      include: { customer: { select: { name: true } }, location: { select: { name: true } }, items: true },
+      include: {
+        customer: { select: { name: true } },
+        location: { select: { name: true } },
+        soldByEmployee: { select: { id: true, firstName: true, lastName: true, employeeCode: true } },
+        items: true
+      },
       orderBy: { soldAt: 'desc' },
       take: 50
     }),
@@ -271,19 +287,47 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
   const itemWhere = { sale: where }
   if (productFilter) itemWhere.product = productFilter
 
-  // Pure Oil consumption from Cream/Jelly manufacturing
-  const creamWhere = { type: 'CREAM_MANUFACTURING' }
+  // Pure Oil CONSUMED by Cream/Jelly sales (spec §8/§12). This is a COST /
+  // inventory movement — NOT Pure Oil sales revenue — so it is tracked
+  // separately from direct Pure Oil sales. Written at sale time by
+  // saleService.js as CREAM_PURE_OIL_CONSUMPTION.
+  const creamWhere = { type: 'CREAM_PURE_OIL_CONSUMPTION' }
   if (startDate || endDate) {
     creamWhere.createdAt = {}
     if (startDate) creamWhere.createdAt.gte = new Date(startDate)
     if (endDate) creamWhere.createdAt.lte = new Date(endDate + 'T23:59:59')
   }
+  if (locationId) creamWhere.locationId = locationId
+  let creamProductIds = null
+  if (productFilter) {
+    creamProductIds = (await prisma.product.findMany({ where: productFilter, select: { id: true } })).map((product) => product.id)
+    if (productId) {
+      const consumedSales = await prisma.saleItem.findMany({ where: { productId, sale: where }, select: { saleId: true } })
+      creamWhere.referenceId = { in: consumedSales.map((line) => line.saleId) }
+    } else if (creamProductIds.length) {
+      const consumedSales = await prisma.saleItem.findMany({ where: { productId: { in: creamProductIds }, sale: where }, select: { saleId: true } })
+      creamWhere.referenceId = { in: consumedSales.map((line) => line.saleId) }
+    } else {
+      creamWhere.productId = '__no_matching_consumption__'
+    }
+  }
+  if (productType && productType !== 'CREAM' && productType !== 'PURE_OIL') creamWhere.productId = '__no_matching_consumption__'
+  if (productType === 'PURE_OIL' && productId) creamWhere.productId = productId
+  if (soldByEmployeeId || customerId || paymentMethod) {
+    const matchingSales = await prisma.sale.findMany({ where, select: { id: true } })
+    creamWhere.referenceId = { in: matchingSales.map((sale) => sale.id) }
+  }
+  const matchingSaleIds = (await prisma.sale.findMany({ where, select: { id: true } })).map((sale) => sale.id)
+  creamWhere.referenceId = creamWhere.referenceId?.in
+    ? { in: creamWhere.referenceId.in.filter((id) => matchingSaleIds.includes(id)) }
+    : { in: matchingSaleIds }
+  creamWhere.referenceType = 'SALE'
 
-  const [byProduct, byBrand, byCategory, unitsSold, byProductType, byEmployee, employeeSalesLog, creamConsumption] = await Promise.all([
+  const [byProduct, byBrand, byCategory, unitsSold, byProductType, byEmployee, employeeSalesLog, rawCreamConsumption, costLines] = await Promise.all([
   prisma.saleItem.groupBy({
     by: ['productId', 'productName'],
     where: itemWhere,
-    _sum: { quantity: true, totalPrice: true },
+    _sum: { quantity: true, totalPrice: true, unitCost: true },
     _count: true,
     orderBy: { _sum: { totalPrice: 'desc' } },
     take: 20
@@ -331,7 +375,9 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
     _sum: { quantity: true }
   }),
 
-  // Sales by product type (including Musk and Cream/Jelly)
+  // Sales by product type (including Musk and Cream/Jelly). Respects the
+  // product-type / form / employee filters so the breakdown matches the rest
+  // of the report.
   prisma.$queryRawUnsafe(`
     SELECT
       p."productType",
@@ -344,6 +390,10 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
     WHERE s.status != 'CANCELLED'
     ${startDate ? `AND s."soldAt" >= '${new Date(startDate).toISOString()}'::timestamptz` : ''}
     ${endDate ? `AND s."soldAt" <= '${new Date(endDate).toISOString()}'::timestamptz` : ''}
+    ${locationId ? `AND s."locationId" = '${String(locationId).replace(/'/g, "''")}'` : ''}
+    ${soldByEmployeeId ? `AND s."soldByEmployeeId" = '${String(soldByEmployeeId).replace(/'/g, "''")}'` : ''}
+    ${productType ? `AND p."productType" = '${String(productType).replace(/'/g, "''")}'` : ''}
+    ${form ? `AND p.form = '${String(form).replace(/'/g, "''")}'` : ''}
     GROUP BY p."productType", p.form
     ORDER BY revenue DESC
   `),
@@ -374,8 +424,36 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
       createdAt: true,
       referenceId: true
     }
+  }),
+  prisma.saleItem.findMany({
+    where: itemWhere,
+    select: { productId: true, productName: true, quantity: true, totalPrice: true, unitCost: true }
   })
 ])
+
+  const costByProduct = new Map()
+  for (const line of costLines) {
+    const row = costByProduct.get(line.productId) || { cost: 0, revenue: 0 }
+    row.cost += Number(line.unitCost || 0) * Number(line.quantity || 0)
+    row.revenue += Number(line.totalPrice || 0)
+    costByProduct.set(line.productId, row)
+  }
+  const totalCogs = round2([...costByProduct.values()].reduce((sum, row) => sum + row.cost, 0))
+
+  const validConsumptionSaleIds = [...new Set(rawCreamConsumption.map((movement) => movement.referenceId).filter(Boolean))]
+  const validConsumptionSales = validConsumptionSaleIds.length
+    ? await prisma.sale.findMany({
+      where: {
+        id: { in: validConsumptionSaleIds },
+        status: { not: 'CANCELLED' },
+        ...(productType === 'CREAM' ? { items: { some: { product: { productType: 'CREAM', ...(form ? { form } : {}), ...(size ? { size: { contains: size, mode: 'insensitive' } } : {}), ...(flavor ? { flavor: { contains: flavor, mode: 'insensitive' } } : {}) } } } } : {}),
+        ...(productType && productType !== 'CREAM' && productType !== 'PURE_OIL' ? { id: '__no_matching_consumption__' } : {})
+      },
+      select: { id: true }
+    })
+    : []
+  const validConsumptionIds = new Set(validConsumptionSales.map((sale) => sale.id))
+  const creamConsumption = rawCreamConsumption.filter((movement) => validConsumptionIds.has(movement.referenceId) && (!creamProductIds || creamProductIds.includes(movement.productId)))
 
   // Sales over time (by day)
   const overTime = await prisma.$queryRawUnsafe(`
@@ -400,6 +478,14 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
   const employeeMap = Object.fromEntries(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`]))
   const products = await prisma.product.findMany({ select: { id: true, name: true } })
   const productMap = Object.fromEntries(products.map((p) => [p.id, p.name]))
+  const consumedSaleIds = [...new Set(creamConsumption.map((movement) => movement.referenceId).filter(Boolean))]
+  const consumedSaleLines = consumedSaleIds.length
+    ? await prisma.saleItem.findMany({
+      where: { saleId: { in: consumedSaleIds }, product: { productType: 'CREAM' } },
+      select: { saleId: true, productName: true }
+    })
+    : []
+  const creamNameBySale = Object.fromEntries(consumedSaleLines.map((line) => [line.saleId, line.productName]))
 
   return {
     summary: {
@@ -430,7 +516,12 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
       discountByEmployee: discountByEmployeeRaw.map((e) => ({ userId: e.createdBy, name: userMap[e.createdBy] || e.createdBy || 'Unassigned', discount: Number(e._sum.discount || 0), transactions: e._count })),
       discountByBranch: discountByBranchRaw.map((l) => ({ locationId: l.locationId, name: locMap[l.locationId] || l.locationId, discount: Number(l._sum.discount || 0), transactions: l._count })),
       freeGiftByEmployee: groupGifts(giftItems, (g) => g.sale?.createdBy, (id) => (id === 'unknown' ? 'Unassigned' : userMap[id] || id)),
-      freeGiftByBranch: groupGifts(giftItems, (g) => g.sale?.locationId, (id) => (id === 'unknown' ? 'Unassigned' : locMap[id] || id))
+      freeGiftByBranch: groupGifts(giftItems, (g) => g.sale?.locationId, (id) => (id === 'unknown' ? 'Unassigned' : locMap[id] || id)),
+      // Total Pure Oil CONSUMED by Cream/Jelly sales in this report window.
+      // A cost/inventory movement — deliberately NOT added to revenue.
+      pureOilConsumedMl: round2(creamConsumption.reduce((s, cm) => s + Number(cm.quantity || 0), 0)),
+      cost: totalCogs,
+      profit: round2(Number(summary._sum.total || 0) - totalCogs)
     },
     overTime: (overTime || []).map((r) => ({ day: r.day, transactions: Number(r.transactions), revenue: Number(r.revenue || 0) })),
     byProduct: byProduct.map((p) => ({
@@ -438,6 +529,8 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
       name: p.productName,
       quantity: p._sum.quantity,
       revenue: Number(p._sum.totalPrice || 0),
+      cost: round2(costByProduct.get(p.productId)?.cost || 0),
+      profit: round2((costByProduct.get(p.productId)?.revenue || 0) - (costByProduct.get(p.productId)?.cost || 0)),
       transactions: p._count
     })),
     byBrand: (byBrand || []).map((b) => ({ brandId: b.brandId, name: b.name, units: Number(b.units || 0), revenue: Number(b.revenue || 0) })),
@@ -467,6 +560,7 @@ export async function getSalesReport({ startDate, endDate, locationId, customerI
       productName: productMap[cm.productId] || 'Unknown',
       quantity: Number(cm.quantity || 0),
       notes: cm.notes,
+      creamProductName: creamNameBySale[cm.referenceId] || null,
       saleId: cm.referenceId,
       createdAt: cm.createdAt
     })),
@@ -568,12 +662,25 @@ prisma.$queryRawUnsafe(`
       sku: p.sku,
       brand: p.brand?.name,
       category: p.category?.name,
+      productType: p.productType,
+      form: p.form,
+      flavor: p.flavor,
+      size: p.size,
       costPrice: Number(p.costPrice),
       sellingPrice: Number(p.price),
       minimumStock: p.minimumStock,
+      stockQuantity: Number(p.stockQuantity),
+      stock50ml: Number(p.stock50ml || 0),
+      stock100ml: Number(p.stock100ml || 0),
       totalStock: p.inventory.reduce((sum, i) => sum + Number(i.quantity), 0),
       costValue: p.inventory.reduce((sum, i) => sum + Number(i.quantity) * Number(p.costPrice), 0),
       retailValue: p.inventory.reduce((sum, i) => sum + Number(i.quantity) * Number(p.price), 0),
+      stockStatus: (() => {
+        const total = p.inventory.reduce((sum, i) => sum + Number(i.quantity), 0)
+        if (total <= 0) return 'OUT_OF_STOCK'
+        if (Number(p.minimumStock) > 0 && total <= Number(p.minimumStock)) return 'LOW_STOCK'
+        return 'IN_STOCK'
+      })(),
       locations: p.inventory.map((i) => ({ location: i.location?.name, quantity: i.quantity, available: i.availableQuantity }))
     })),
     lowStock,

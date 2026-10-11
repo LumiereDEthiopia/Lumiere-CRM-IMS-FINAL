@@ -155,7 +155,7 @@ function AdminLayout() {
                   <div key={category} style={styles.searchGroup}>
                     <div style={styles.searchGroupTitle}>{category}</div>
                     {items.slice(0, 5).map((item) => (
-                      <div key={item.id || item.name} style={styles.searchResult} onClick={() => { navigate(item.link); setSearchOpen(false); setQuery('') }}}>
+                      <div key={item.id || item.name} style={styles.searchResult} onClick={() => { navigate(item.link); setSearchOpen(false); setQuery('') }}>
                         <span style={styles.searchResultIcon}>{item.type === 'product' ? '🧴' : item.type === 'sale' ? '🧾' : item.type === 'customer' ? '👤' : '📁'}</span>
                         <span style={styles.searchResultName}>{item.name}</span>
                         {item.total !== undefined && <span style={styles.searchResultMeta}>{item.total}</span>}
@@ -164,7 +164,7 @@ function AdminLayout() {
                   </div>
                 ))}
               </div>
-            )
+            )}
           </div>
           <div style={styles.headerRight}>
             <button style={styles.notifBtn} onClick={() => setNotifOpen(!notifOpen)} aria-label="Notifications">
@@ -188,7 +188,7 @@ function AdminLayout() {
                   ))
                 )}
               </div>
-            )
+            )}
             <div style={styles.userInfo}>
               <span style={styles.userName}>{user?.name || 'Admin'}</span>
               <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>

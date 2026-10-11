@@ -12,8 +12,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  console.log(user, permissions, isAuthenticated)
-
   const loadUser = useCallback(async () => {
     try {
       const token = localStorage.getItem('auth_token')

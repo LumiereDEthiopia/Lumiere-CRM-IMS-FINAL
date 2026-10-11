@@ -25,7 +25,10 @@ itemRouter.get('/:id/movements', requireAnyPermission('items:view_movements', 'i
 const itemCategoryRouter = Router()
 
 itemCategoryRouter.route('/')
-  .get(requireAnyPermission('items:view', 'product:view'), itemController.getItemCategories)
+  .get(
+  requireAnyPermission('items:view', 'product:view', 'items:create'),
+  itemController.getItemCategories
+)
   .post(requirePermission('items:create'), itemController.createNewItemCategory)
 
 itemCategoryRouter.route('/:id')

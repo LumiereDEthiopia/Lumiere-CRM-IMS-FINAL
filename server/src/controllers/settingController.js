@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = [
   { key: 'finance_country', value: 'ETHIOPIA', type: 'string' },
   { key: 'finance_currency', value: 'ETB', type: 'string' },
   { key: 'finance_accounting_basis', value: 'ACCRUAL', type: 'string' },
+  { key: 'finance_reporting_framework', value: 'UNCONFIRMED', type: 'string' },
   { key: 'inventory_cost_method', value: 'FIFO', type: 'string' },
   { key: 'finance_fiscal_year_start', value: '07-08', type: 'string' },
   { key: 'ethiopia_taxpayer_tin', value: '', type: 'string' },
@@ -89,6 +90,9 @@ export function validateSettingEntry({ key, value, type }) {
     const method = text.trim().toUpperCase()
     if (!/^[A-Z_]{1,40}$/.test(method)) throw new ApiError(400, 'pos_default_payment_method must be a code like CASH')
     text = method
+  }
+  if (key === 'finance_reporting_framework' && !['UNCONFIRMED', 'IFRS_FULL', 'IFRS_SME', 'IPSAS'].includes(text)) {
+    throw new ApiError(400, 'Select a valid reporting framework')
   }
   return { key, value: text, type: effectiveType }
 }

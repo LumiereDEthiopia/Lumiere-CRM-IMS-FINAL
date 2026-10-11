@@ -12,7 +12,16 @@ export async function dashboardSummary(req, res, next) {
 }
 
 export async function salesReport(req, res, next) {
-  try { res.json({ success: true, data: await getSalesReport(req.query) }) } catch (e) { next(e) }
+  try {
+    const {
+      startDate, endDate, locationId, customerId, productId, brandId, categoryId,
+      productType, form, flavor, size, paymentMethod, soldByEmployeeId
+    } = req.query
+    res.json({ success: true, data: await getSalesReport({
+      startDate, endDate, locationId, customerId, productId, brandId, categoryId,
+      productType, form, flavor, size, paymentMethod, soldByEmployeeId
+    }) })
+  } catch (e) { next(e) }
 }
 
 export async function salesLogs(req, res, next) {

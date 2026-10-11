@@ -11,10 +11,11 @@ import './admin-styles.css'
 import './accounting-styles.css'
 
 const REPORTS = {
-  'trial-balance': { name: 'Trial Balance', description: 'Verify debit and credit balances', icon: '⚖️' },
-  'income-statement': { name: 'Income Statement', description: 'View revenue, expenses and profit', icon: '📈' },
-  'balance-sheet': { name: 'Balance Sheet', description: 'View assets, liabilities and equity', icon: '🏛️' },
-  'cash-flow': { name: 'Cash Flow Statement', description: 'View cash inflows and outflows', icon: '💵' }
+  'trial-balance': { name: 'Trial Balance', description: 'Check ledger balances and double-entry totals', icon: '⚖️' },
+  'income-statement': { name: 'Statement of Profit or Loss', description: 'Review income, expenses and period result', icon: '📈' },
+  'balance-sheet': { name: 'Statement of Financial Position', description: 'Review assets, liabilities and equity', icon: '🏛️' },
+  'changes-in-equity': { name: 'Statement of Changes in Equity', description: 'Review opening equity, movements and result', icon: '↗️' },
+  'cash-flow': { name: 'Statement of Cash Flows', description: 'Review operating, investing and financing cash flows', icon: '💵' }
 }
 
 const QUICK_RANGES = [
@@ -49,7 +50,26 @@ function rangeFor(key) {
   }
 }
 
-const defaults = rangeFor('month')
+function fiscalYearRange(startValue = '07-08') {
+  const match = String(startValue).match(/^(\d{1,2})-(\d{1,2})$/)
+  const month = Math.min(12, Math.max(1, Number(match?.[1]) || 7))
+  const day = Math.min(28, Math.max(1, Number(match?.[2]) || 8))
+  const now = new Date()
+  const currentStart = new Date(now.getFullYear(), month - 1, day)
+  const year = now < currentStart ? now.getFullYear() - 1 : now.getFullYear()
+  const from = new Date(year, month - 1, day)
+  const to = year === now.getFullYear() ? now : new Date(year + 1, month - 1, day - 1)
+  return { dateFrom: iso(from), dateTo: iso(to) }
+}
+
+const defaults = fiscalYearRange()
+
+const frameworkName = (key) => ({
+  IFRS_FULL: 'IFRS Accounting Standards (full IFRS)',
+  IFRS_SME: 'IFRS for SMEs',
+  IPSAS: 'IPSAS',
+  UNCONFIRMED: 'Not confirmed with AABE'
+}[key] || 'Not confirmed with AABE')
 
 function fmtDate(v) {
   if (!v) return '—'
@@ -69,7 +89,11 @@ function AccountingPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api.get('/api/reports/accounting/company').then((r) => setCompany(r.data?.data)).catch(() => {})
+    api.get('/api/reports/accounting/company').then((r) => {
+      const detail = r.data?.data
+      setCompany(detail)
+      if (detail?.fiscalYearStart) setFilters((prev) => ({ ...prev, ...fiscalYearRange(detail.fiscalYearStart) }))
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -103,7 +127,7 @@ function AccountingPage() {
   }, [active, load])
 
   function applyQuick(key) {
-    const range = rangeFor(key)
+    const range = key === 'financialYear' ? fiscalYearRange(company?.fiscalYearStart) : rangeFor(key)
     if (range) setFilters((f) => ({ ...f, ...range }))
   }
 
@@ -157,7 +181,7 @@ function AccountingPage() {
             <input id="acc-to" type="date" value={filters.dateTo || ''} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
           </div>
           <div className="quick-filters">
-            {QUICK_RANGES.map((r) => (
+            {[...QUICK_RANGES, { key: 'financialYear', label: 'Financial Year' }].map((r) => (
               <button key={r.key} type="button" className="btn-quick" onClick={() => applyQuick(r.key)}>{r.label}</button>
             ))}
           </div>
@@ -189,11 +213,17 @@ function AccountingPage() {
       {company && (
         <div className="report-header">
           <h3 className="report-company">{company.name}</h3>
-          <p className="report-meta">Accounting Report — {meta.name}</p>
+          <p className="report-meta">Management report — {meta.name}</p>
           <p className="report-meta">Period: {fmtDate(filters.dateFrom)} – {fmtDate(filters.dateTo)}</p>
-          <p className="report-meta">Generated: {new Date().toLocaleString()} · Currency: {company.currency || 'ETB'}</p>
+          <p className="report-meta">Reporting framework: {frameworkName(company.reportingFramework)} · Configured basis: {company.accountingBasis || 'ACCRUAL'} · Generated: {new Date().toLocaleString()} · Currency: {company.currency || 'ETB'}</p>
+          <p className="report-meta">AABE classification and statutory compliance have not been verified by this software.</p>
         </div>
       )}
+
+      <div className="card" style={{ borderLeft: '4px solid #c28b27' }}>
+        <strong>For management review</strong>
+        <p className="page-subtitle" style={{ margin: '0.25rem 0 0' }}>Choose the entity’s framework under Settings → Ethiopian Finance after confirming its AABE category. Reports aggregate posted journal entries and do not convert them to cash basis. They are not an audited or filing-ready set of financial statements; account classifications, comparative figures, notes, and statutory disclosures still require professional review.</p>
+      </div>
 
       {loading && <div className="loading-container"><div className="spinner" /><span>Loading report…</span></div>}
       {error && <div className="card"><p className="empty-text" style={{ color: '#c0392b' }}>{error}</p></div>}
@@ -203,6 +233,7 @@ function AccountingPage() {
           {active === 'trial-balance' && <TrialBalance data={data} />}
           {active === 'income-statement' && <IncomeStatement data={data} />}
           {active === 'balance-sheet' && <BalanceSheet data={data} />}
+          {active === 'changes-in-equity' && <ChangesInEquity data={data} />}
           {active === 'cash-flow' && <CashFlow data={data} />}
         </>
       )}
@@ -246,7 +277,7 @@ function TotalRow({ label, value, strong }) {
 
 function TrialBalance({ data }) {
   const rows = data.rows.map((r) => ({ ...r, typeName: r.type.charAt(0) + r.type.slice(1).toLowerCase() }))
-  const imbalanced = Math.abs(data.totals.difference) >= 0.01
+  const imbalanced = Math.abs(data.totals.difference) >= 0.01 || Math.abs(data.totals.closingDifference) >= 0.01
   return (
     <div className="card">
       <h3 className="card-title">Trial Balance</h3>
@@ -255,19 +286,21 @@ function TrialBalance({ data }) {
           { label: 'Account Code', key: 'code' },
           { label: 'Name', key: 'name' },
           { label: 'Type', key: 'typeName' },
-          { label: 'Opening', align: 'right', render: (r) => etb(r.opening) },
+          { label: 'Opening Debit', align: 'right', render: (r) => etb(r.openingDebit) },
+          { label: 'Opening Credit', align: 'right', render: (r) => etb(r.openingCredit) },
           { label: 'Debit', align: 'right', render: (r) => etb(r.debit) },
           { label: 'Credit', align: 'right', render: (r) => etb(r.credit) },
           { label: 'Closing Debit', align: 'right', render: (r) => etb(r.closingDebit) },
           { label: 'Closing Credit', align: 'right', render: (r) => etb(r.closingCredit) }
         ]}
         rows={rows}
-        footer={['Totals', '', '', etb(data.totals.openingDebit || 0), etb(data.totals.debit), etb(data.totals.credit), etb(data.totals.closingDebit), etb(data.totals.closingCredit)]}
+        footer={['Totals', '', '', etb(data.totals.openingDebit || 0), etb(data.totals.openingCredit || 0), etb(data.totals.debit), etb(data.totals.credit), etb(data.totals.closingDebit), etb(data.totals.closingCredit)]}
       />
       <div className={`balance-check ${imbalanced ? 'bad' : 'good'}`}>
-        Total Debit: {etb(data.totals.debit, { withCode: true })} · Total Credit: {etb(data.totals.credit, { withCode: true })} · Difference: {etb(data.totals.difference, { withCode: true })}
+        Period difference: {etb(data.totals.difference, { withCode: true })} · Closing balance difference: {etb(data.totals.closingDifference, { withCode: true })}
         {imbalanced ? ' — IMBALANCED, investigate the ledger' : ' — Balanced ✓'}
       </div>
+      <p className="page-subtitle">Opening and closing debit/credit totals are shown separately. An imbalance requires ledger review before relying on downstream statements.</p>
     </div>
   )
 }
@@ -289,7 +322,7 @@ function IncomeStatement({ data }) {
   const t = data.totals
   return (
     <div className="card">
-      <h3 className="card-title">Income Statement</h3>
+      <h3 className="card-title">Statement of Profit or Loss</h3>
       <SectionList title="Revenue" items={data.revenue} totalLabel="Total Revenue" />
       <SectionList title="Cost of Goods Sold" items={data.cogs} totalLabel="Total COGS" />
       <TotalRow label="Gross Profit" value={t.grossProfit} />
@@ -313,25 +346,17 @@ function BalanceSheet({ data }) {
   const line = (x) => ({ name: x.name, code: x.code, amount: x.amount })
   return (
     <div className="card">
-      <h3 className="card-title">Balance Sheet — as of {fmtDate(data.asOf)}</h3>
-      <h4 className="section-title">Assets</h4>
-      <SectionList title="Current Assets" items={[
-        ...data.assets.cashAndBank.map(line), ...data.assets.accountsReceivable.map(line), ...data.assets.inventory.map(line), ...data.assets.otherCurrent.map(line)
-      ]} />
-      <SectionList title="Non-Current Assets" items={data.assets.fixedAssets.map(line)} />
+      <h3 className="card-title">Statement of Financial Position — as of {fmtDate(data.asOf)}</h3>
+      <p className="page-subtitle">Accounts are grouped by ledger type. Current/non-current classification is not configured in the chart of accounts.</p>
+      <SectionList title="Assets" items={data.assets.accounts.map(line)} />
       <TotalRow label="Total Assets" value={t.totalAssets} strong />
       <h4 className="section-title">Liabilities</h4>
-      <SectionList title="Current Liabilities" items={[
-        ...data.liabilities.accountsPayable.map(line), ...data.liabilities.taxesPayable.map(line), ...data.liabilities.otherCurrent.map(line)
-      ]} />
-      <SectionList title="Non-Current Liabilities" items={data.liabilities.loans.map(line)} />
+      <SectionList items={data.liabilities.accounts.map(line)} />
       <TotalRow label="Total Liabilities" value={t.totalLiabilities} strong />
       <h4 className="section-title">Equity</h4>
       <SectionList items={[
-        ...data.equity.baseEquity.map(line), ...data.equity.ownerCapital.map(line),
-        ...data.equity.ownerDrawings.map((x) => ({ ...line(x), amount: -x.amount })),
-        ...data.equity.retainedEarnings.map(line),
-        { name: 'Current Year Profit / (Loss)', code: '', amount: data.equity.currentYearProfit }
+        ...data.equity.accounts.map(line),
+        { name: 'Unclosed Profit / (Loss) Since Ledger Start', code: '', amount: data.equity.unclosedProfitLoss }
       ]} />
       <TotalRow label="Total Equity" value={t.totalEquity} strong />
       <TotalRow label="Total Liabilities + Equity" value={t.totalLiabilitiesEquity} strong />
@@ -343,11 +368,34 @@ function BalanceSheet({ data }) {
   )
 }
 
+function ChangesInEquity({ data }) {
+  const t = data.totals
+  return (
+    <div className="card">
+      <h3 className="card-title">Statement of Changes in Equity</h3>
+      <p className="page-subtitle">Period movement schedule based on posted equity entries and profit or loss. Comparative-period presentation and disclosures are not included.</p>
+      <Table columns={[
+        { label: 'Equity Account', key: 'name' },
+        { label: 'Code', key: 'code' },
+        { label: 'Opening', align: 'right', render: (r) => etb(r.opening) },
+        { label: 'Debits', align: 'right', render: (r) => etb(r.debit) },
+        { label: 'Credits', align: 'right', render: (r) => etb(r.credit) },
+        { label: 'Closing', align: 'right', render: (r) => etb(r.closing) }
+      ]} rows={data.rows} />
+      <TotalRow label="Opening Equity" value={t.openingEquity} />
+      <TotalRow label="Equity Account Movements" value={t.equityMovements} />
+      <TotalRow label="Profit / (Loss) for Period" value={t.profitOrLoss} />
+      <TotalRow label="Closing Equity" value={t.closingEquity} strong />
+    </div>
+  )
+}
+
 function CashFlow({ data }) {
   const t = data.totals
   return (
     <div className="card">
-      <h3 className="card-title">Cash Flow Statement</h3>
+      <h3 className="card-title">Statement of Cash Flows</h3>
+      <p className="page-subtitle">Classification is inferred from account types, codes and names. Review it against the entity’s accounting policies before use.</p>
       <SectionList title="Operating Activities" items={data.operating} totalLabel="Net Operating" />
       <SectionList title="Investing Activities" items={data.investing} totalLabel="Net Investing" />
       <SectionList title="Financing Activities" items={data.financing} totalLabel="Net Financing" />
@@ -361,7 +409,7 @@ function CashFlow({ data }) {
   )
 }
 
-/* ---------------- Landing (4 cards) ---------------- */
+/* ---------------- Landing (accounting report cards) ---------------- */
 
 function AccountingHome() {
   const navigate = useNavigate()
@@ -370,7 +418,7 @@ function AccountingHome() {
       <div className="page-header-row">
         <div>
           <h2 className="page-title">Accounting</h2>
-          <p className="page-subtitle">Standard accounting reports built from the Lumière ledger</p>
+          <p className="page-subtitle">Ethiopian finance management reports from the posted ledger. Confirm AABE framework and review mappings before statutory use.</p>
         </div>
       </div>
       <div className="card-grid">

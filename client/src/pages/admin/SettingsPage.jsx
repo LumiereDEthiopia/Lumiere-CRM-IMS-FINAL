@@ -17,7 +17,7 @@ const SECTIONS = {
   'Sales & POS': ['pos_default_payment_method', 'pos_payment_methods', 'pos_discount_limit_percent'],
   Inventory: ['low_stock_threshold', 'overstock_multiplier', 'default_location'],
   'Product Codes': ['product_code_prefix_unisex', 'product_code_prefix_male', 'product_code_prefix_female', 'product_code_prefix_kids', 'product_code_prefix_oil', 'product_code_next_number'],
-  'Ethiopian Finance': ['finance_country', 'finance_currency', 'finance_accounting_basis', 'inventory_cost_method', 'finance_fiscal_year_start', 'ethiopia_taxpayer_tin', 'ethiopia_vat_registered', 'ethiopia_vat_rate', 'ethiopia_vat_inclusive', 'ethiopia_withholding_enabled', 'ethiopia_withholding_rate', 'ethiopia_invoice_prefix', 'ethiopia_invoice_next_number'],
+  'Ethiopian Finance': ['finance_country', 'finance_currency', 'finance_reporting_framework', 'finance_accounting_basis', 'inventory_cost_method', 'finance_fiscal_year_start', 'ethiopia_taxpayer_tin', 'ethiopia_vat_registered', 'ethiopia_vat_rate', 'ethiopia_vat_inclusive', 'ethiopia_withholding_enabled', 'ethiopia_withholding_rate', 'ethiopia_invoice_prefix', 'ethiopia_invoice_next_number'],
   Notifications: ['notifications_enabled'],
   Backups: ['backup_interval_hours', 'backup_retention_days']
 }
@@ -40,6 +40,7 @@ const FIELD_META = {
   default_location: { label: 'Default Location', input: 'location' },
   product_code_next_number: { label: 'Product Code Next Number', input: 'number' },
   finance_accounting_basis: { label: 'Accounting Basis', input: 'select', options: ['ACCRUAL', 'CASH'] },
+  finance_reporting_framework: { label: 'AABE Reporting Framework (confirm your entity category)', input: 'select', options: ['UNCONFIRMED', 'IFRS_FULL', 'IFRS_SME', 'IPSAS'] },
   inventory_cost_method: { label: 'Inventory Cost Method', input: 'select', options: ['FIFO', 'LIFO', 'AVCO'] },
   ethiopia_taxpayer_tin: { label: 'Taxpayer TIN' },
   ethiopia_vat_registered: { label: 'VAT Registered', input: 'boolean' },
@@ -63,8 +64,8 @@ function SettingsPage() {
   const [section, setSection] = useState('General')
   const [locations, setLocations] = useState([])
   const { user, hasPermission, setPermissions } = useAuth()
-  const canManageRoles = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || hasPermission('setting:manage')
-  const canManageSettings = canManageRoles
+  const canManageRoles = user?.role === 'SUPER_ADMIN'
+  const canManageSettings = user?.role === 'SUPER_ADMIN' || hasPermission('setting:manage')
   const [roles, setRoles] = useState([])
   const [permModules, setPermModules] = useState([])
   const [selectedRoleId, setSelectedRoleId] = useState(null)
@@ -343,6 +344,14 @@ function SettingsPage() {
                       style={{ width: '100%', marginTop: '0.35rem', padding: '0.4rem', border: '1px solid #e0e0e0', borderRadius: 6, fontSize: '0.8rem' }}
                     />
                     {selectedRole.name === 'SUPER_ADMIN' && <p className="page-subtitle">Super Admin always holds every permission and cannot be modified.</p>}
+                    {canManageRoles && selectedRole.users?.length > 0 && (
+                      <div className="card" style={{ margin: '0.75rem 0' }}>
+                        <h5 style={{ margin: '0 0 0.4rem' }}>Accounts assigned to this role ({selectedRole.userCount})</h5>
+                        <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                          {selectedRole.users.map((account) => <li key={account.id}>{account.name}{account.isActive ? '' : ' (inactive)'}</li>)}
+                        </ul>
+                      </div>
+                    )}
                     <div>
                       {permModules.map(({ module, permissions: perms }) => {
                         const modNames = perms.map((p) => p.name)
@@ -375,7 +384,7 @@ function SettingsPage() {
                       </div>
                     )}
                     {!canManageRoles && (
-                      <p className="page-subtitle">You have view-only access. Only Super Admin and Admin can grant or revoke role permissions.</p>
+                      <p className="page-subtitle">You have view-only access. Only an active Super Admin can grant or revoke role permissions.</p>
                     )}
                     <p className="page-subtitle">Assign this job role when creating an employee account (Employees → Add Employee → Account Role). Changes apply immediately to all accounts with this role.</p>
                   </div>
@@ -444,7 +453,7 @@ function SettingsPage() {
                       </select>
                     ) : meta.input === 'select' ? (
                       <select id={`setting-${key}`} value={value} onChange={(e) => set(e.target.value)} disabled={disabled}>
-                        {(meta.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                        {(meta.options || []).map((o) => <option key={o} value={o}>{o === 'UNCONFIRMED' ? 'Not confirmed with AABE' : o === 'IFRS_FULL' ? 'IFRS Accounting Standards (full IFRS)' : o === 'IFRS_SME' ? 'IFRS for SMEs' : o === 'IPSAS' ? 'IPSAS' : o}</option>)}
                       </select>
                     ) : meta.input === 'payment' ? (
                       <select id={`setting-${key}`} value={value} onChange={(e) => set(e.target.value)} disabled={disabled}>

@@ -13,7 +13,7 @@ function money(n) {
 
 function ReportsPage() {
   const [tab, setTab] = useState('sales')
-  const [filters, setFilters] = useState({ startDate: '', endDate: '', locationId: '', employeeId: '' })
+  const [filters, setFilters] = useState({ startDate: '', endDate: '', locationId: '', employeeId: '', productType: '', productId: '', flavor: '', form: '', size: '', paymentMethod: '' })
   const [locations, setLocations] = useState([])
   const [employees, setEmployees] = useState([])
   const [sales, setSales] = useState(null)
@@ -41,6 +41,8 @@ function ReportsPage() {
         if (filters.startDate) q.set('startDate', filters.startDate)
         if (filters.endDate) q.set('endDate', filters.endDate)
         if (filters.locationId) q.set('locationId', filters.locationId)
+        if (filters.employeeId) q.set('soldByEmployeeId', filters.employeeId)
+        for (const key of ['productType', 'productId', 'flavor', 'form', 'size', 'paymentMethod']) if (filters[key]) q.set(key, filters[key])
         const r = await api.get(`/api/reports/sales?${q}`)
         setSales(r.data)
       } else if (name === 'sales-logs') {
@@ -128,6 +130,11 @@ function ReportsPage() {
               {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </label>
+          <label>Sold By<select value={filters.employeeId} onChange={(e) => setFilters({ ...filters, employeeId: e.target.value })}><option value="">All</option>{employees.map((e) => <option key={e.id} value={e.id}>{e.firstName} {e.lastName}</option>)}</select></label>
+          <label>Type<select value={filters.productType} onChange={(e) => setFilters({ ...filters, productType: e.target.value })}><option value="">All</option><option value="PERFUME">Perfume</option><option value="PURE_OIL">Pure Oil</option><option value="MUSK">Musk</option><option value="CREAM">Cream/Jelly</option></select></label>
+          {filters.productType === 'MUSK' && <label>Flavor<input value={filters.flavor} onChange={(e) => setFilters({ ...filters, flavor: e.target.value })} /></label>}
+          {filters.productType === 'CREAM' && <><label>Form<select value={filters.form} onChange={(e) => setFilters({ ...filters, form: e.target.value })}><option value="">All</option><option value="CREAM">Cream</option><option value="JELLY">Jelly</option></select></label><label>Size<select value={filters.size} onChange={(e) => setFilters({ ...filters, size: e.target.value })}><option value="">All</option><option value="30 ml">30 ml</option><option value="50 ml">50 ml</option></select></label></>}
+          <label>Payment<select value={filters.paymentMethod} onChange={(e) => setFilters({ ...filters, paymentMethod: e.target.value })}><option value="">All</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option><option value="TELEBIRR">Telebirr</option><option value="CARD">Card</option><option value="CREDIT">Credit</option></select></label>
           <button type="button" className="btn btn-primary" onClick={() => loadTab('sales')}>Apply</button>
         </div>
       )}
@@ -174,6 +181,9 @@ function ReportsPage() {
             <Metric title="Total Discounts" value={money(sales.summary?.totalDiscounts)} />
             <Metric title="Net Taxable Sales" value={money(sales.summary?.netTaxableSales)} />
             <Metric title="VAT" value={money(sales.summary?.vatTotal)} />
+            <Metric title="Cost of Goods" value={money(sales.summary?.cost)} />
+            <Metric title="Profit" value={money(sales.summary?.profit)} />
+            <Metric title="Pure Oil Consumed (ml)" value={sales.summary?.pureOilConsumedMl ?? 0} />
             <Metric title="Free Gift Items" value={sales.summary?.freeGiftCount ?? 0} />
             <Metric title="Free Gift Value" value={money(sales.summary?.freeGiftValue)} />
           </div>
@@ -217,11 +227,15 @@ function ReportsPage() {
           </div>
           <div className="card">
             <h3 className="card-title">By Product</h3>
-            <DataTable columns={['Product', 'Qty', 'Revenue', 'Txns']} rows={(sales.byProduct || []).map((p) => [p.name, p.quantity, money(p.revenue), p.transactions])} />
+            <DataTable columns={['Product', 'Qty', 'Revenue', 'Cost', 'Profit', 'Txns']} rows={(sales.byProduct || []).map((p) => [p.name, p.quantity, money(p.revenue), money(p.cost), money(p.profit), p.transactions])} />
           </div>
           <div className="card">
             <h3 className="card-title">Employee Performance (by Sales Count)</h3>
             <DataTable columns={['Employee', 'Sales Count', 'Total Revenue']} rows={(sales.employeePerformance || []).map((e) => [e.name, e.salesCount, money(e.totalRevenue)])} empty="No employee sales data." />
+          </div>
+          <div className="card">
+            <h3 className="card-title">Pure Oil consumption (inventory cost, not sales)</h3>
+            <DataTable columns={['Pure Oil', 'Consumed (ml)', 'Cream/Jelly product', 'Sale', 'Date']} rows={(sales.creamConsumption || []).map((m) => [m.productName, m.quantity, m.creamProductName || 'Cream/Jelly', m.saleId || '—', m.createdAt ? new Date(m.createdAt).toLocaleString() : '—'])} empty="No Pure Oil consumption recorded for this period." />
           </div>
         </>
       )}

@@ -88,6 +88,8 @@ export async function getTrialBalance(filters = {}) {
       name: account.name,
       type: account.type,
       opening: openingNet,
+      openingDebit: Math.max(0, openingNet),
+      openingCredit: Math.max(0, -openingNet),
       debit: periodDebit,
       credit: periodCredit,
       // Presentation: for a debit-nature account with a credit closing balance
@@ -99,15 +101,17 @@ export async function getTrialBalance(filters = {}) {
 
   const total = (key) => r2(rows.reduce((s, row) => s + row[key], 0))
   const totals = {
-    openingDebit: total('opening'),
-    openingCredit: 0,
+    openingDebit: total('openingDebit'),
+    openingCredit: total('openingCredit'),
     debit: total('debit'),
     credit: total('credit'),
     closingDebit: total('closingDebit'),
     closingCredit: total('closingCredit'),
-    difference: 0
+    difference: 0,
+    closingDifference: 0
   }
   totals.difference = r2(totals.debit - totals.credit)
+  totals.closingDifference = r2(totals.closingDebit - totals.closingCredit)
   return { rows, totals, generatedAt: new Date().toISOString() }
 }
 
@@ -124,12 +128,13 @@ export async function getIncomeStatement(filters = {}) {
     return list
   }
 
-  const revenue = collect((row) => ['4000', '4010'].includes(row.code))
-  const otherIncome = collect((row) => row.code === '4020')
-  const cogs = collect((row) => row.code === '5000')
-  const opex = collect((row) => ['5110', '5120', '5130', '5140', '5150', '5160', '5190'].includes(row.code))
-  const otherExpenses = collect((row) => ['6010', '6020'].includes(row.code))
-  const taxRows = collect((row) => row.code === '9900')
+  const otherIncome = collect((row) => row.type === 'REVENUE' && row.code === '4020')
+  const revenue = collect((row) => row.type === 'REVENUE' && row.code !== '4020')
+  const cogs = collect((row) => row.type === 'EXPENSE' && (row.code === '5000' || /cost of goods|cost of sales/i.test(row.name)))
+  const taxRows = collect((row) => row.type === 'EXPENSE' && (row.code === '9900' || /income tax/i.test(row.name)))
+  const otherExpenses = collect((row) => row.type === 'EXPENSE' && (row.code === '6010' || row.code === '6020' || /interest|finance charge|other expense/i.test(row.name)) && !taxRows.some((tax) => tax.code === row.code))
+  const excluded = new Set([...cogs, ...taxRows, ...otherExpenses].map((row) => row.code))
+  const opex = collect((row) => row.type === 'EXPENSE' && !excluded.has(row.code))
 
   const sum = (list) => r2(list.reduce((s, x) => s + x.amount, 0))
   const totalRevenue = sum(revenue)
@@ -151,21 +156,22 @@ export async function getIncomeStatement(filters = {}) {
 }
 
 /**
- * Balance Sheet — cumulative since inception (position at dateTo).
- * Current-year profit comes from the income statement up to dateTo.
+ * Statement of Financial Position — cumulative ledger position at dateTo.
+ * All accounts of each balance-sheet type are included so new accounts do not
+ * disappear simply because they were not in a hard-coded code list.
  */
 export async function getBalanceSheet(filters = {}) {
   const asOf = filters.dateTo || new Date().toISOString().slice(0, 10)
   const [byAccount, income] = await Promise.all([
     ledgerBalances({ dateTo: asOf }),
-    getIncomeStatement({ dateFrom: '1970-01-01', dateTo: asOf })
+    getIncomeStatement({ dateTo: asOf })
   ])
 
   const closing = (row) => r2(isDebitNature(row.type) ? row.debit - row.credit : row.credit - row.debit)
-  const accountRows = (codes) => {
+  const accountRows = (type) => {
     const list = []
     for (const [, row] of byAccount) {
-      if (codes.includes(row.code)) {
+      if (row.type === type) {
         const amount = closing(row)
         if (amount !== 0) list.push({ code: row.code, name: row.name, amount })
       }
@@ -174,44 +180,24 @@ export async function getBalanceSheet(filters = {}) {
     return list
   }
 
-  const cashAndBank = accountRows(['1010', '1020', '1000'])
-  const accountsReceivable = accountRows(['1100'])
-  const inventory = accountRows(['1200'])
-  const otherCurrent = accountRows(['1300'])
-  const fixedAssets = accountRows(['1400', '1410', '1490'])
-
-  const accountsPayable = accountRows(['2000', '2100', '2200'])
-  const taxesPayable = accountRows(['2300'])
-  const otherCurrentLiab = accountRows(['2400'])
-  const loans = accountRows(['2500'])
-
-  const baseEquity = accountRows(['3000'])
-  const ownerCapital = accountRows(['3100'])
-  const ownerDrawings = accountRows(['3200'])
-  const retained = accountRows(['3300'])
+  const assets = accountRows('ASSET')
+  const liabilities = accountRows('LIABILITY')
+  const equityAccounts = accountRows('EQUITY')
 
   const sum = (list) => r2(list.reduce((s, x) => s + x.amount, 0))
   const currentYearProfit = income.totals.netProfit
-
-  const totalCurrentAssets = r2(sum(cashAndBank) + sum(accountsReceivable) + sum(inventory) + sum(otherCurrent))
-  const totalNonCurrentAssets = r2(sum(fixedAssets))
-  const totalAssets = r2(totalCurrentAssets + totalNonCurrentAssets)
-
-  const totalCurrentLiabilities = r2(sum(accountsPayable) + sum(taxesPayable) + sum(otherCurrentLiab))
-  const totalNonCurrentLiabilities = r2(sum(loans))
-  const totalLiabilities = r2(totalCurrentLiabilities + totalNonCurrentLiabilities)
-
-  const totalEquity = r2(sum(baseEquity) + sum(ownerCapital) - sum(ownerDrawings) + sum(retained) + currentYearProfit)
+  const totalAssets = sum(assets)
+  const totalLiabilities = sum(liabilities)
+  const totalEquity = r2(sum(equityAccounts) + currentYearProfit)
   const totalLiabilitiesEquity = r2(totalLiabilities + totalEquity)
 
   return {
     asOf,
-    assets: { cashAndBank, accountsReceivable, inventory, otherCurrent, fixedAssets },
-    liabilities: { accountsPayable, taxesPayable, otherCurrent: otherCurrentLiab, loans },
-    equity: { baseEquity, ownerCapital, ownerDrawings, retainedEarnings: retained, currentYearProfit },
+    assets: { accounts: assets },
+    liabilities: { accounts: liabilities },
+    equity: { accounts: equityAccounts, unclosedProfitLoss: currentYearProfit },
     totals: {
-      totalCurrentAssets, totalNonCurrentAssets, totalAssets,
-      totalCurrentLiabilities, totalNonCurrentLiabilities, totalLiabilities,
+      totalAssets, totalLiabilities,
       totalEquity, totalLiabilitiesEquity,
       balanceDifference: r2(totalAssets - totalLiabilitiesEquity)
     },
@@ -219,47 +205,63 @@ export async function getBalanceSheet(filters = {}) {
   }
 }
 
+/** Equity movement schedule for the selected period. */
+export async function getChangesInEquity(filters = {}) {
+  const [period, opening] = await Promise.all([ledgerBalances(filters), openingBalances(filters.dateFrom)])
+  const accounts = await prisma.account.findMany({ where: { isActive: true, type: 'EQUITY' }, orderBy: { code: 'asc' } })
+  const rows = accounts.map((account) => {
+    const open = opening.get(account.id)
+    const movement = period.get(account.id)
+    const openingBalance = open ? r2(open.credit - open.debit) : 0
+    const debit = movement?.debit || 0
+    const credit = movement?.credit || 0
+    return { code: account.code, name: account.name, opening: openingBalance, debit, credit, movement: r2(credit - debit), closing: r2(openingBalance + credit - debit) }
+  }).filter((row) => row.opening || row.debit || row.credit)
+  const income = await getIncomeStatement(filters)
+  const sum = (key) => r2(rows.reduce((total, row) => total + row[key], 0))
+  const openingEquity = sum('opening')
+  const equityMovements = sum('movement')
+  const closingEquity = r2(openingEquity + equityMovements + income.totals.netProfit)
+  return {
+    rows,
+    totals: { openingEquity, equityMovements, profitOrLoss: income.totals.netProfit, closingEquity },
+    generatedAt: new Date().toISOString()
+  }
+}
+
 /**
- * Cash Flow Statement — classifies ledger movements that touch cash/bank
- * accounts (1010, 1020) into Operating / Investing / Financing using the
- * counter account of each entry. Opening + Net Change = Closing.
+ * Cash Flow Statement — allocates each journal entry's cash movement across
+ * every non-cash account line. Activity classification remains a reviewable
+ * chart-of-accounts convention and is flagged as such in the report UI.
  */
 export async function getCashFlowStatement(filters = {}) {
   const cashIds = (await prisma.account.findMany({ where: { code: { in: ['1010', '1020'] } }, select: { id: true } })).map((a) => a.id)
 
-  const openingLines = await prisma.journalLine.findMany({
+  const openingLines = filters.dateFrom ? await prisma.journalLine.findMany({
     where: { accountId: { in: cashIds }, journalEntry: filters.dateFrom ? { status: 'POSTED', entryDate: { lt: new Date(`${filters.dateFrom}T00:00:00.000`) } } : { status: 'POSTED' } },
     select: { debit: true, credit: true }
-  })
+  }) : []
   const openingCash = r2(openingLines.reduce((s, l) => s + Number(l.debit) - Number(l.credit), 0))
 
-  const periodLines = await prisma.journalLine.findMany({
-    where: { accountId: { in: cashIds }, journalEntry: periodWhere(filters) },
-    select: { debit: true, credit: true, journalEntry: { select: { id: true } } }
+  const entries = await prisma.journalEntry.findMany({
+    where: periodWhere(filters),
+    include: { lines: { include: { account: { select: { id: true, code: true, type: true, name: true } } } } }
   })
-
-  // Counter-account per entry (first non-cash line) drives the classification
-  const entryIds = [...new Set(periodLines.map((l) => l.journalEntry.id))]
-  const counterLines = entryIds.length
-    ? await prisma.journalLine.findMany({
-        where: { journalEntryId: { in: entryIds }, accountId: { notIn: cashIds } },
-        select: { journalEntryId: true, account: { select: { code: true, type: true, name: true } } }
-      })
-    : []
-  const counterByEntry = new Map()
-  for (const l of counterLines) if (!counterByEntry.has(l.journalEntryId)) counterByEntry.set(l.journalEntryId, l)
 
   const buckets = { operating: new Map(), investing: new Map(), financing: new Map() }
   const addMovement = (bucket, name, delta) => buckets[bucket].set(name, r2((buckets[bucket].get(name) || 0) + delta))
-  for (const l of periodLines) {
-    const inflow = r2(Number(l.debit) - Number(l.credit))
-    const counter = counterByEntry.get(l.journalEntry.id)
-    const cName = counter?.account?.name || 'Other'
-    const cType = counter?.account?.type || ''
-    const cCode = counter?.account?.code || ''
-    if (['1400', '1410', '1490'].includes(cCode)) addMovement('investing', cName, inflow)
-    else if (cType === 'EQUITY' || cCode === '2500') addMovement('financing', cName, inflow)
-    else addMovement('operating', cName, inflow)
+  for (const entry of entries) {
+    const hasCashMovement = entry.lines.some((line) => ['1010', '1020'].includes(line.account.code) && Number(line.debit) !== Number(line.credit))
+    if (!hasCashMovement) continue
+    for (const counter of entry.lines.filter((line) => !['1010', '1020'].includes(line.account.code))) {
+      const effect = r2(Number(counter.credit) - Number(counter.debit))
+      if (!effect) continue
+      const code = counter.account.code
+      const name = counter.account.name
+      const isInvesting = /^14/.test(code) || /property|equipment|fixed asset|investment/i.test(name)
+      const isFinancing = counter.account.type === 'EQUITY' || /^25/.test(code) || /loan|borrow/i.test(name)
+      addMovement(isInvesting ? 'investing' : isFinancing ? 'financing' : 'operating', name, effect)
+    }
   }
 
   const toList = (map) => [...map.entries()].map(([name, amount]) => ({ name, amount })).filter((x) => x.amount !== 0)
@@ -275,6 +277,7 @@ export async function getCashFlowStatement(filters = {}) {
   return {
     operating, investing, financing,
     totals: { netOperating, netInvesting, netFinancing, netChange, openingCash, closingCash: r2(openingCash + netChange) },
+    classificationNotice: 'Cash-flow activity is inferred from account types, codes and names; review account mapping before statutory use.',
     generatedAt: new Date().toISOString()
   }
 }
@@ -282,7 +285,7 @@ export async function getCashFlowStatement(filters = {}) {
 /** Company header from stored settings (never hard-coded). */
 export async function getCompanyHeader() {
   const settings = await prisma.setting.findMany({
-    where: { key: { in: ['business_name', 'business_phone', 'business_email', 'ethiopia_taxpayer_tin', 'finance_currency'] } },
+    where: { key: { in: ['business_name', 'business_phone', 'business_email', 'ethiopia_taxpayer_tin', 'finance_currency', 'finance_reporting_framework', 'finance_fiscal_year_start', 'finance_accounting_basis'] } },
     select: { key: true, value: true }
   })
   const map = Object.fromEntries(settings.map((s) => [s.key, s.value]))
@@ -291,7 +294,10 @@ export async function getCompanyHeader() {
     phone: map.business_phone || null,
     email: map.business_email || null,
     tin: map.ethiopia_taxpayer_tin || null,
-    currency: map.finance_currency || 'ETB'
+    currency: map.finance_currency || 'ETB',
+    reportingFramework: map.finance_reporting_framework || 'UNCONFIRMED',
+    accountingBasis: map.finance_accounting_basis || 'ACCRUAL',
+    fiscalYearStart: map.finance_fiscal_year_start || '07-08'
   }
 }
 
@@ -308,6 +314,7 @@ export async function listChartOfAccounts() {
 export default {
   ledgerBalances, openingBalances,
   getTrialBalance, getIncomeStatement, getBalanceSheet, getCashFlowStatement,
+  getChangesInEquity,
   getCompanyHeader, listChartOfAccounts
 }
 

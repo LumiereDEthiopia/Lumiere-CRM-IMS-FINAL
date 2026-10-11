@@ -38,8 +38,9 @@ function EmployeesPage() {
   const [roles, setRoles] = useState([])
   const [form, setForm] = useState(emptyForm())
   const imp = useImportExport('employees', { onImported: () => fetch(1, search) })
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
   const canViewSensitive = hasPermission('employee:view_sensitive')
+  const canManageAccounts = user?.role === 'SUPER_ADMIN'
 
   const fetch = useCallback(async (page = 1, s = '') => {
     setLoading(true)
@@ -87,6 +88,9 @@ function EmployeesPage() {
       // salary / TIN / pension data — those fields are simply not submitted.
       if (!canViewSensitive) {
         for (const f of ['salary', 'salaryCurrency', 'salaryPaymentFrequency', 'salaryPaymentDay', 'salaryStartDate', 'salaryNotes', 'tinNumber', 'pensionIdNumber']) delete payload[f]
+      }
+      if (!canManageAccounts) {
+        for (const f of ['accountRole', 'accountEmail', 'accountPassword']) delete payload[f]
       }
       if (payload.salary === '') delete payload.salary
       if (payload.salaryPaymentDay === '') payload.salaryPaymentDay = null
@@ -144,9 +148,11 @@ function EmployeesPage() {
             <div className="form-field"><label>Phone</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             <div className="form-field"><label>Job Title</label><input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} /></div>
             <div className="form-field"><label>Department</label><select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}><option value="">Select...</option>{departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
-            <div className="form-field"><label>Account Role</label><select value={form.accountRole} onChange={(e) => setForm({ ...form, accountRole: e.target.value })}><option value="">No account</option>{roles.map((r) => <option key={r.name} value={r.name}>{roleLabel(r.name)}</option>)}</select></div>
-            <div className="form-field"><label>Account Email</label><input type="email" value={form.accountEmail} onChange={(e) => setForm({ ...form, accountEmail: e.target.value })} /></div>
-            <div className="form-field"><label>Account Password</label><input type="password" value={form.accountPassword} onChange={(e) => setForm({ ...form, accountPassword: e.target.value })} placeholder={editing ? 'Leave blank to keep current' : ''} /></div>
+            {canManageAccounts && <>
+              <div className="form-field"><label>Account Role</label><select value={form.accountRole} onChange={(e) => setForm({ ...form, accountRole: e.target.value })}><option value="">No account</option>{roles.map((r) => <option key={r.name} value={r.name}>{roleLabel(r.name)}</option>)}</select></div>
+              <div className="form-field"><label>Account Email</label><input type="email" value={form.accountEmail} onChange={(e) => setForm({ ...form, accountEmail: e.target.value })} /></div>
+              <div className="form-field"><label>Account Password</label><input type="password" value={form.accountPassword} onChange={(e) => setForm({ ...form, accountPassword: e.target.value })} placeholder={editing ? 'Leave blank to keep current' : ''} /></div>
+            </>}
             <div className="form-field"><label>ID Front Image URL</label><input value={form.idFrontUrl} onChange={(e) => setForm({ ...form, idFrontUrl: e.target.value })} /></div>
             <div className="form-field"><label>ID Back Image URL</label><input value={form.idBackUrl} onChange={(e) => setForm({ ...form, idBackUrl: e.target.value })} /></div>
             <div className="form-field full-width"><label>PDF Document URL</label><input value={form.pdfDocumentUrl} onChange={(e) => setForm({ ...form, pdfDocumentUrl: e.target.value })} /></div>

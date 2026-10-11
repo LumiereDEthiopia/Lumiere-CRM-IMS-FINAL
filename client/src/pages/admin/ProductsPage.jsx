@@ -98,8 +98,10 @@ function ProductsPage() {
       const only100ml = /100ml/i.test(p.size || '') && !/50ml/i.test(p.size || '')
       const s50 = untracked ? (only100ml ? 0 : Number(p.stockQuantity || 0)) : Number(p.stock50ml || 0)
       const s100 = untracked ? (only100ml ? Number(p.stockQuantity || 0) : 0) : Number(p.stock100ml || 0)
-      setEditing(p); setFormData({ name: p.name, slug: p.slug, description: p.description || '', shortDescription: p.shortDescription || '', brandId: p.brandId, categoryId: p.categoryId || '', gender: p.gender || '', productType: p.productType || 'PERFUME', price: String(p.price), price100ml: p.price100ml != null ? String(p.price100ml) : '', compareAtPrice: p.compareAtPrice ? String(p.compareAtPrice) : '', stockQuantity: String(p.stockQuantity), stock50ml: String(s50), stock100ml: String(s100), sku: p.sku || '', size: p.size || '', concentration: p.concentration || '', year: p.year ? String(p.year) : '', country: p.country || '', isActive: p.isActive, isFeatured: p.isFeatured, isNew: p.isNew, isLuxury: p.isLuxury }); setShowModal(true)
-    } catch (e) { alert(e.message) }
+      setEditing(p); setFormData({ name: p.name, slug: p.slug, description: p.description || '', shortDescription: p.shortDescription || '', brandId: p.brandId, categoryId: p.categoryId || '', gender: p.gender || '', productType: p.productType || 'PERFUME', price: String(p.price), price100ml: p.price100ml != null ? String(p.price100ml) : '', compareAtPrice: p.compareAtPrice ? String(p.compareAtPrice) : '', costPrice: p.costPrice != null ? String(p.costPrice) : '', stockQuantity: String(p.stockQuantity), stock50ml: String(s50), stock100ml: String(s100), sku: p.sku || '', size: p.size || '', concentration: p.concentration || '', year: p.year ? String(p.year) : '', country: p.country || '', isActive: p.isActive, isFeatured: p.isFeatured, isNew: p.isNew, isLuxury: p.isLuxury, flavor: p.flavor || '', form: p.form || '', pureOilProductId: p.pureOilProductId || '', pureOilProductName: p.pureOilSource?.name || '', pureOilStock: p.pureOilSource?.stockQuantity ?? '' }); setShowModal(true)
+    } catch (e) {
+      console.error(e)
+      alert(e.message) }
     setLoading(false)
   }
 
@@ -115,6 +117,7 @@ function ProductsPage() {
         ...fd,
         price: parseFloat(fd.price) || 0,
         price100ml: fd.price100ml != null && fd.price100ml !== '' ? parseFloat(fd.price100ml) : null,
+        costPrice: fd.costPrice != null && fd.costPrice !== '' ? parseFloat(fd.costPrice) || 0 : 0,
         stockQuantity: isPerfumeRow ? s50 + s100 : (parseFloat(fd.stockQuantity) || 0),
         stock50ml: isPerfumeRow ? s50 : undefined,
         stock100ml: isPerfumeRow ? s100 : undefined,
@@ -124,14 +127,16 @@ function ProductsPage() {
       if (editing) await api.put(`/api/products/${editing.id}`, pl); else await api.post('/api/products', pl)
       setShowModal(false); loadProducts(1, search, section)
     }
-    catch (e) { alert(e.message) }
+    catch (e) {
+      console.error(e)
+      alert(e.message) }
   }
 
-    const cols = [imgCol, { key: 'sku', label: 'Code', width: '110px', render: (s, row) => (<span style={{ fontWeight: 500 }}>{s || '-'}{codeSize(row) && <span style={{ display: 'block', fontSize: '0.65rem', color: '#6b7280', fontWeight: 600 }}>{codeSize(row)}</span>}</span>) }, { key: 'name', label: 'Name' }, { key: 'productType', label: 'Type', render: (t, row) => (<span><span style={{ fontWeight: 600 }}>{t === 'PURE_OIL' ? 'Pure Oil' : t === 'OIL' ? 'Oil' : 'Perfume'}</span><span style={{ fontSize: '0.7rem', color: '#9a9a9a', marginLeft: 6 }}>{t === 'PERFUME' ? (row.size || '50/100ml') : 'per gram'}</span></span>) }, { key: 'brand', label: 'Brand', render: (b) => b?.name || '-' }, { key: 'category', label: 'Category', render: (c) => c?.name || '-' }, { key: 'price', label: 'Price', width: '130px', render: (p, row) => row.productType === 'PERFUME' ? (row.price100ml != null ? <span>{etb(Number(p))} <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>50ml</span><br />{etb(Number(row.price100ml))} <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>100ml</span></span> : <span>{etb(Number(p))} <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>/bottle</span></span>) : etb(Number(p)) + ' /g' }, { key: 'stockQuantity', label: 'Stock', width: '120px', align: 'center', render: (q, row) => {
+    const cols = [imgCol, { key: 'sku', label: 'Code', width: '110px', render: (s, row) => (<span style={{ fontWeight: 500 }}>{s || '-'}{codeSize(row) && <span style={{ display: 'block', fontSize: '0.65rem', color: '#6b7280', fontWeight: 600 }}>{codeSize(row)}</span>}</span>) }, { key: 'name', label: 'Name' }, { key: 'productType', label: 'Type', render: (t, row) => (<span><span style={{ fontWeight: 600 }}>{t === 'PURE_OIL' ? 'Pure Oil' : t === 'OIL' ? 'Oil' : t === 'MUSK' ? 'Musk' : t === 'CREAM' ? 'Cream/Jelly' : 'Perfume'}</span><span style={{ fontSize: '0.7rem', color: '#9a9a9a', marginLeft: 6 }}>{t === 'PERFUME' ? (row.size || '50/100ml') : t === 'MUSK' ? (row.size || '3 ml') : t === 'CREAM' ? `${row.form === 'JELLY' ? 'Jelly' : 'Cream'} ${row.size || ''}`.trim() : 'per gram'}</span></span>) }, { key: 'brand', label: 'Brand', render: (b) => b?.name || '-' }, { key: 'category', label: 'Category', render: (c) => c?.name || '-' }, { key: 'price', label: 'Price', width: '130px', render: (p, row) => row.productType === 'PERFUME' ? (row.price100ml != null ? <span>{etb(Number(p))} <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>50ml</span><br />{etb(Number(row.price100ml))} <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>100ml</span></span> : <span>{etb(Number(p))} <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>/bottle</span></span>) : (row.productType === 'MUSK' || row.productType === 'CREAM') ? <span>{etb(Number(p))} <span style={{ fontSize: '0.65rem', color: '#6b7280' }}>/unit</span></span> : etb(Number(p)) + ' /g' }, { key: 'stockQuantity', label: 'Stock', width: '120px', align: 'center', render: (q, row) => {
       const summary = sizeStockSummary(row)
       return (
         <span>
-          <span style={{ color: Number(q) <= 10 ? '#C62828' : Number(q) <= 20 ? '#E65100' : '#2E7D32', fontWeight: 600 }}>{Number(q)}{row.productType === 'PERFUME' ? '' : ' g'}</span>
+          <span style={{ color: Number(q) <= 10 ? '#C62828' : Number(q) <= 20 ? '#E65100' : '#2E7D32', fontWeight: 600 }}>{Number(q)}{row.productType === 'PERFUME' ? '' : (row.productType === 'MUSK' || row.productType === 'CREAM') ? ' u' : ' g'}</span>
           {summary && <span style={{ display: 'block', fontSize: '0.62rem', color: '#6b7280', whiteSpace: 'nowrap' }}>{summary}</span>}
         </span>
       )

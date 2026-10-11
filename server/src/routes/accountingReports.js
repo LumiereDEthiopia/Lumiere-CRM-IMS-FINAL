@@ -4,7 +4,7 @@
  */
 import { Router } from 'express'
 import {
-  trialBalance, incomeStatement, balanceSheet, cashFlowStatement, companyHeader, accounts, createManualEntry
+  trialBalance, incomeStatement, balanceSheet, cashFlowStatement, changesInEquity, companyHeader, accounts, createManualEntry
 } from '../controllers/accountingReportController.js'
 import { buildExcelWorkbook } from '../services/accountingExportService.js'
 import { requireAnyPermission } from '../middleware/authorize.js'
@@ -17,6 +17,7 @@ router.get('/trial-balance', trialBalance)
 router.get('/income-statement', incomeStatement)
 router.get('/balance-sheet', balanceSheet)
 router.get('/cash-flow', cashFlowStatement)
+router.get('/changes-in-equity', changesInEquity)
 router.get('/company', companyHeader)
 router.get('/accounts', accounts)
 router.post('/transactions', createManualEntry)

@@ -5,14 +5,15 @@
  */
 import * as XLSX from 'xlsx'
 import {
-  getTrialBalance, getIncomeStatement, getBalanceSheet, getCashFlowStatement, getCompanyHeader
+  getTrialBalance, getIncomeStatement, getBalanceSheet, getCashFlowStatement, getChangesInEquity, getCompanyHeader
 } from './accountingReportService.js'
 
 const REPORTS = {
   'trial-balance': 'Trial Balance',
   'income-statement': 'Income Statement',
   'balance-sheet': 'Balance Sheet',
-  'cash-flow': 'Cash Flow Statement'
+  'cash-flow': 'Statement of Cash Flows',
+  'changes-in-equity': 'Statement of Changes in Equity'
 }
 
 const num = (v) => Math.round((Number(v) || 0) * 100) / 100
@@ -24,8 +25,10 @@ function headerRows(company, title, filters) {
     ['Accounting Report'],
     [title],
     [`Period: ${period}`],
+    [`AABE reporting framework: ${company.reportingFramework || 'UNCONFIRMED'}`],
+    ['Management report only — not verified as a complete statutory financial statement set'],
     [`Generated: ${new Date().toLocaleString()}`],
-    [`Currency: ${company.currency} (ETB)`],
+    [`Configured currency: ${company.currency || 'ETB'}`],
     []
   ]
 }
@@ -57,11 +60,12 @@ export async function buildExcelWorkbook(report, filters) {
 
   if (report === 'trial-balance') {
     const data = await getTrialBalance(filters)
-    rows.push(['Code', 'Account Name', 'Type', 'Opening', 'Period Debit', 'Period Credit', 'Closing Debit', 'Closing Credit'])
-    for (const row of data.rows) rows.push([row.code, row.name, row.type, num(row.opening), num(row.debit), num(row.credit), num(row.closingDebit), num(row.closingCredit)])
+    rows.push(['Code', 'Account Name', 'Type', 'Opening Debit', 'Opening Credit', 'Period Debit', 'Period Credit', 'Closing Debit', 'Closing Credit'])
+    for (const row of data.rows) rows.push([row.code, row.name, row.type, num(row.openingDebit), num(row.openingCredit), num(row.debit), num(row.credit), num(row.closingDebit), num(row.closingCredit)])
     rows.push([])
-    rows.push(['Totals', '', '', num(data.totals.openingDebit), num(data.totals.debit), num(data.totals.credit), num(data.totals.closingDebit), num(data.totals.closingCredit)])
-    boldTotal('Difference (Debit − Credit)', data.totals.difference)
+    rows.push(['Totals', '', '', num(data.totals.openingDebit), num(data.totals.openingCredit), num(data.totals.debit), num(data.totals.credit), num(data.totals.closingDebit), num(data.totals.closingCredit)])
+    boldTotal('Period Movement Difference (Debit − Credit)', data.totals.difference)
+    boldTotal('Closing Balance Difference (Debit − Credit)', data.totals.closingDifference)
   } else if (report === 'income-statement') {
     const data = await getIncomeStatement(filters)
     rows.push(['Section', 'Account', 'Code', 'Amount'])
@@ -82,23 +86,19 @@ export async function buildExcelWorkbook(report, filters) {
     const data = await getBalanceSheet(filters)
     rows.push(['Section', 'Account', 'Code', 'Amount'])
     const sections = [
-      ['Current Asset', data.assets.cashAndBank], ['Current Asset', data.assets.accountsReceivable],
-      ['Current Asset', data.assets.inventory], ['Current Asset', data.assets.otherCurrent],
-      ['Non-Current Asset', data.assets.fixedAssets],
-      ['Current Liability', data.liabilities.accountsPayable], ['Current Liability', data.liabilities.taxesPayable],
-      ['Current Liability', data.liabilities.otherCurrent], ['Non-Current Liability', data.liabilities.loans],
-      ['Equity', data.equity.baseEquity], ['Equity', data.equity.ownerCapital],
-      ['Equity', data.equity.ownerDrawings], ['Equity', data.equity.retainedEarnings]
+      ['Assets', data.assets.accounts],
+      ['Liabilities', data.liabilities.accounts],
+      ['Equity', data.equity.accounts]
     ]
     for (const [section, list] of sections) for (const x of list) rows.push([section, x.name, x.code, num(x.amount)])
-    rows.push(['Equity', 'Current Year Profit / (Loss)', '', num(data.equity.currentYearProfit)])
+    rows.push(['Equity', 'Unclosed Profit / (Loss) Since Ledger Start', '', num(data.equity.unclosedProfitLoss)])
     rows.push([])
     boldTotal('Total Assets', data.totals.totalAssets)
     boldTotal('Total Liabilities', data.totals.totalLiabilities)
     boldTotal('Total Equity', data.totals.totalEquity)
     boldTotal('Liabilities + Equity', data.totals.totalLiabilitiesEquity)
     boldTotal('Balance Difference', data.totals.balanceDifference)
-  } else {
+  } else if (report === 'cash-flow') {
     const data = await getCashFlowStatement(filters)
     rows.push(['Category', 'Detail', 'Amount'])
     for (const x of data.operating) rows.push(['Operating', x.name, num(x.amount)])
@@ -111,6 +111,15 @@ export async function buildExcelWorkbook(report, filters) {
     boldTotal('Net Change in Cash', data.totals.netChange)
     boldTotal('Opening Cash', data.totals.openingCash)
     boldTotal('Closing Cash', data.totals.closingCash)
+  } else {
+    const data = await getChangesInEquity(filters)
+    rows.push(['Account', 'Code', 'Opening Equity', 'Debits', 'Credits', 'Closing Equity'])
+    for (const x of data.rows) rows.push([x.name, x.code, num(x.opening), num(x.debit), num(x.credit), num(x.closing)])
+    rows.push([])
+    boldTotal('Opening Equity', data.totals.openingEquity)
+    boldTotal('Equity Movements', data.totals.equityMovements)
+    boldTotal('Profit / (Loss) for Period', data.totals.profitOrLoss)
+    boldTotal('Closing Equity', data.totals.closingEquity)
   }
 
   rows.push([])

@@ -6,11 +6,36 @@ import { ApiError } from '../middleware/errorHandler.js'
 import { createAuditLog } from './auditService.js'
 import { sanitizeTin } from './tinVerificationService.js'
 import { resolveSoldSize, sizeBuckets, sizeMlOf, availableForSize, productStockPatch, lineMl } from './sizeStockService.js'
+import { creamSizeLabel, pureOilConsumptionMl, pureOilCostForCream } from './pureOilService.js'
 import { consumeItemsForSale, validateItemsForSale, restoreItemsForSaleCancel } from './itemService.js'
 import { postSaleEntry, deleteJournalEntriesForSource } from './accountingService.js'
 
 // Monetary rounding — 2 decimals, same rule as the accounting service.
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+
+/**
+ * Pure Oil requirement for ONE Cream/Jelly sale line.
+ *
+ * Centralizes the business rule (pureOilService.js): 30 ml → 4 ml Pure Oil,
+ * 50 ml → 6 ml Pure Oil, per unit. Returns null for every non-Cream line so
+ * Perfume / Oil / Pure Oil / Musk sales are completely unaffected.
+ *
+ * `product` must expose { productType, size, pureOilProductId }.
+ */
+export function creamPureOilNeed(product, quantity) {
+  if (!product || product.productType !== 'CREAM') return null
+  const creamSize = creamSizeLabel(product.size)
+  if (!creamSize) return null
+  const qty = Number(quantity)
+  if (!Number.isFinite(qty) || qty <= 0) return null
+  const requiredMl = pureOilConsumptionMl({ size: creamSize, quantity: qty })
+  return {
+    pureOilProductId: product.pureOilProductId || null,
+    creamSize,
+    perUnitMl: pureOilConsumptionMl({ size: creamSize, quantity: 1 }),
+    requiredMl
+  }
+}
 
 /**
  * Sale tax/total calculation — the single business rule for VAT, withholding and
@@ -330,6 +355,26 @@ export async function getSale(id) {
     }
   }
 
+  // Pure Oil consumed by this sale's Cream/Jelly lines — read from the audited
+  // stock movements so historical sales show the exact ml that were deducted
+  // (a cost/inventory movement, never customer revenue).
+  const consumed = await prisma.stockMovement.findMany({
+    where: { type: 'CREAM_PURE_OIL_CONSUMPTION', referenceType: 'SALE', referenceId: id },
+    select: { productId: true, quantity: true }
+  })
+  if (consumed.length) {
+    const oilIds = [...new Set(consumed.map((c) => c.productId))]
+    const oils = await prisma.product.findMany({ where: { id: { in: oilIds } }, select: { id: true, name: true } })
+    const oilMap = Object.fromEntries(oils.map((o) => [o.id, o.name]))
+    sale.pureOilConsumption = consumed.map((c) => ({
+      pureOilProductId: c.productId,
+      pureOilName: oilMap[c.productId] || null,
+      consumedMl: Number(c.quantity || 0)
+    }))
+  } else {
+    sale.pureOilConsumption = []
+  }
+
   return sale
 }
 
@@ -519,10 +564,14 @@ export async function createSale({
     // Prices are resolved from the CATALOG — the browser's numbers are
     // validated but never trusted for money maths (backend is authoritative).
     const linePricing = []
+    // Pure Oil needed per linked Pure Oil product across the whole sale, so two
+    // Cream lines that share one Pure Oil can never over-draw it. Filled in
+    // Pass 1 and validated BEFORE any write; deducted atomically in Pass 3.
+    const pureOilNeeds = new Map()
     for (const item of items) {
       const product = await tx.product.findUnique({
         where: { id: item.productId },
-        select: { id: true, name: true, productType: true, size: true, stockQuantity: true, stock50ml: true, stock100ml: true, price: true, price100ml: true }
+        select: { id: true, name: true, productType: true, size: true, stockQuantity: true, stock50ml: true, stock100ml: true, price: true, price100ml: true, costPrice: true, pureOilProductId: true, pureOilSource: { select: { id: true, productType: true, costPrice: true, size: true } } }
       })
       if (!product) throw new ApiError(404, `Product ${item.productId} not found`)
       const quantity = parseFloat(item.quantity)
@@ -532,6 +581,21 @@ export async function createSale({
       const available = availableForSize({ product, inventory: inv, size: soldSize })
       if (available < quantity) {
         throw new ApiError(400, `Insufficient stock for ${product.name}${soldSize ? ` (${soldSize})` : ''} — only ${available} available`)
+      }
+
+      // Cream/Jelly consumes its linked Pure Oil (30 ml → 4 ml, 50 ml → 6 ml per
+      // unit). The rule lives in pureOilService.js — the UI only displays it.
+      // Aggregate the requirement so a shared Pure Oil is checked once for the
+      // whole sale (never allowing a partial/negative draw).
+      const creamNeed = creamPureOilNeed(product, quantity)
+      if (creamNeed) {
+        if (!creamNeed.pureOilProductId) {
+          throw new ApiError(400, `Cream/Jelly product ${product.name} has no linked Pure Oil`)
+        }
+        const prev = pureOilNeeds.get(creamNeed.pureOilProductId) || { requiredMl: 0, products: [] }
+        prev.requiredMl = round2(prev.requiredMl + creamNeed.requiredMl)
+        prev.products.push({ productId: product.id, name: product.name, size: creamNeed.creamSize, quantity })
+        pureOilNeeds.set(creamNeed.pureOilProductId, prev)
       }
 
       const catalogPrice = resolveServerUnitPrice(product, item.size)
@@ -553,9 +617,28 @@ export async function createSale({
         isFreeGift: item.isFreeGift === true || String(item.itemType || '').toUpperCase() === 'FREE_GIFT',
         label: product.name
       })
-      linePricing.push({ item, product, quantity, soldSize, available, ...pricing })
+      linePricing.push({ item, product, quantity, soldSize, available, creamNeed, ...pricing })
     }
     validateCombinedSaleStock(linePricing)
+
+    // ---- Pure Oil availability check (before ANY write) ----
+    // Each linked Pure Oil must cover the FULL sale's consumption, otherwise the
+    // entire sale is rejected and nothing is deducted (no partial transaction).
+    const pureOilRows = new Map()
+    for (const [pureOilProductId, need] of pureOilNeeds) {
+      const oil = await tx.product.findUnique({
+        where: { id: pureOilProductId },
+        select: { id: true, name: true, sku: true, productType: true, stockQuantity: true }
+      })
+      if (!oil || oil.productType !== 'PURE_OIL') {
+        throw new ApiError(400, `Cream/Jelly is linked to an invalid Pure Oil product (${pureOilProductId})`)
+      }
+      const availableMl = Number(oil.stockQuantity || 0)
+      if (availableMl < need.requiredMl) {
+        throw new ApiError(400, `Insufficient Pure Oil stock. Required: ${need.requiredMl} ml, Available: ${availableMl} ml`)
+      }
+      pureOilRows.set(pureOilProductId, { ...oil, availableMl })
+    }
 
     // ---- Pass 2: totals, permission gate & tax — still before any write ----
     // subtotal = gross of PAID lines only (free gifts never enter revenue).
@@ -644,7 +727,28 @@ export async function createSale({
       const unitPrice = pricing.unitPrice
       const isGift = pricing.itemType === 'FREE_GIFT'
       const product = await tx.product.findUnique({ where: { id: item.productId } })
-      const unitCost = parseFloat(item.unitCost || product?.costPrice || 0)
+      // Actual COGS for the line (spec §9). For Cream/Jelly the real cost is the
+      // base cost PLUS the cost of the Pure Oil it consumes (4 ml / 6 ml per
+      // unit), using the Pure Oil's own costing (costPrice ÷ its ml size). This
+      // unitCost feeds the accounting COGS journal and every profit report, so
+      // profit is always Revenue − Actual COGS with no hardcoded numbers.
+      let unitCost = parseFloat(product?.costPrice || 0)
+      const creamNeed = line.creamNeed
+      if (creamNeed && creamNeed.pureOilProductId) {
+        const oil = line.product.pureOilSource?.id === creamNeed.pureOilProductId
+          ? line.product.pureOilSource
+          : await tx.product.findUnique({
+            where: { id: creamNeed.pureOilProductId },
+            select: { id: true, productType: true, costPrice: true, size: true }
+          })
+        const oilCost = pureOilCostForCream({ size: creamNeed.creamSize, pureOil: oil })
+        // Catalog cost is authoritative; a client-provided unitCost must not
+        // override the persisted base cost used by COGS and profit reporting.
+        if (!oil || oil.productType !== 'PURE_OIL') {
+          throw new ApiError(400, `Cream/Jelly product ${product?.name || item.productId} has an invalid linked Pure Oil`)
+        }
+        unitCost = round2((Number.isFinite(unitCost) ? unitCost : 0) + oilCost)
+      }
       const totalPrice = pricing.charged
       // Identify the bottle being sold (ml) so stock is deducted by size
       const soldSize = resolveSoldSize({ product, requested: item.size })
@@ -709,6 +813,59 @@ export async function createSale({
             ? `FREE GIFT — regular value Br ${round2(pricing.gross).toFixed(2)} — ${saleNumber}`
             : (sizeTracked ? `${soldSize} bottle(s) — ${soldMl} ml deducted from ${soldSize} stock` : null)
         }
+      })
+    }
+
+    // ---- Pass 3: atomic Pure Oil deduction for Cream/Jelly lines ----
+    // Only Cream/Jelly sales move Pure Oil. The amount was validated in Pass 1
+    // and is deducted here inside the SAME transaction as the sale, so a
+    // Cream/Jelly sale can never exist without its Pure Oil deduction (and the
+    // deduction can never happen without the sale). This is a COST/inventory
+    // movement, never customer revenue — recorded as CREAM_PURE_OIL_CONSUMPTION
+    // with the sale reference so it is fully auditable and excluded from Pure
+    // Oil sales revenue in reports.
+    const pureOilConsumption = []
+    for (const [pureOilProductId, need] of pureOilNeeds) {
+      const oil = pureOilRows.get(pureOilProductId)
+      // Re-read inside the transaction for concurrency safety.
+      const fresh = await tx.product.findUnique({ where: { id: pureOilProductId }, select: { stockQuantity: true } })
+      const previousMl = Number(fresh?.stockQuantity ?? oil?.stockQuantity ?? 0)
+      if (previousMl < need.requiredMl) {
+        throw new ApiError(400, `Insufficient Pure Oil stock. Required: ${need.requiredMl} ml, Available: ${previousMl} ml`)
+      }
+      const resultingMl = round2(previousMl - need.requiredMl)
+      await tx.product.update({ where: { id: pureOilProductId }, data: { stockQuantity: resultingMl } })
+
+      // Keep the per-location Pure Oil inventory row in sync (best effort —
+      // seeded from product stock when this location has no row yet).
+      const oilInv = await tx.inventory.findUnique({ where: { productId_locationId: { productId: pureOilProductId, locationId } } })
+      if (oilInv) {
+        const invPrev = Number(oilInv.quantity)
+        const invNext = Math.max(0, round2(invPrev - need.requiredMl))
+        await tx.inventory.update({ where: { id: oilInv.id }, data: { quantity: invNext, availableQuantity: invNext - Number(oilInv.reservedQuantity) } })
+      }
+
+      const creamSummary = need.products.map((p) => `${p.quantity}×${p.name} (${p.size})`).join(', ')
+      await tx.stockMovement.create({
+        data: {
+          productId: pureOilProductId, locationId, type: 'CREAM_PURE_OIL_CONSUMPTION',
+          quantity: need.requiredMl, previousQuantity: previousMl, resultingQuantity: resultingMl,
+          referenceType: 'SALE', referenceId: sale.id, userId: createdBy,
+          reason: `Pure Oil consumed by Cream/Jelly sale ${saleNumber}`,
+          notes: `${need.requiredMl} ml consumed for ${creamSummary}`
+        }
+      })
+      await createAuditLog({
+        db: tx, userId: createdBy, action: 'PURE_OIL_CONSUMED_BY_SALE', entity: 'Sale', entityId: sale.id,
+        details: {
+          saleNumber, locationId, pureOilProductId,
+          pureOilName: oil?.name || null, consumedMl: need.requiredMl,
+          previousMl, resultingMl, creams: need.products
+        }
+      })
+      pureOilConsumption.push({
+        pureOilProductId, pureOilName: oil?.name || null, consumedMl: need.requiredMl,
+        previousMl, resultingMl
       })
     }
 
@@ -842,15 +999,18 @@ export async function createSale({
       })
     }
 
-    return tx.sale.findUnique({
+    const createdSale = await tx.sale.findUnique({
       where: { id: sale.id },
       include: {
         customer: true,
         location: true,
         soldByEmployee: { select: { id: true, firstName: true, lastName: true, employeeCode: true } },
-        items: { include: { product: { select: { id: true, name: true, sku: true, size: true, productType: true, flavor: true, form: true } } } }
+        items: { include: { product: { select: { id: true, name: true, sku: true, size: true, productType: true, flavor: true, form: true, pureOilProductId: true } } } }
       }
     })
+    // Attach the Pure Oil consumed by this sale (Cream/Jelly only) so the
+    // receipt / sale detail can show it read-only. Non-Cream sales → [].
+    return { ...createdSale, pureOilConsumption }
   }).then(async (created) => {
     // Post the double-entry journal record for the sale (outside the outer
     // transaction so ledger issues never block the business flow).
@@ -893,6 +1053,38 @@ export async function cancelSale(id, userId) {
     // Items consumed by this sale (bottles/boxes/bags) are returned to stock
     // in the same cancelling transaction.
     await restoreItemsForSaleCancel(tx, { saleId: id, locationId: sale.locationId, userId })
+
+    // Reverse any Pure Oil this sale consumed for Cream/Jelly lines. The
+    // original consumption is read from its own audited stock movements so the
+    // exact ml are returned (never recomputed), keeping Pure Oil stock correct
+    // after a cancel. This is the exact inverse of the sale-time deduction.
+    const consumedMovements = await tx.stockMovement.findMany({
+      where: { type: 'CREAM_PURE_OIL_CONSUMPTION', referenceType: 'SALE', referenceId: id },
+      select: { id: true, productId: true, quantity: true, previousQuantity: true, resultingQuantity: true }
+    })
+    for (const mv of consumedMovements) {
+      const oil = await tx.product.findUnique({ where: { id: mv.productId }, select: { stockQuantity: true } })
+      if (!oil) continue
+      const prevMl = Number(oil.stockQuantity || 0)
+      const restoreMl = Number(mv.quantity || 0)
+      const nextMl = round2(prevMl + restoreMl)
+      await tx.product.update({ where: { id: mv.productId }, data: { stockQuantity: nextMl } })
+      const oilInv = await tx.inventory.findUnique({ where: { productId_locationId: { productId: mv.productId, locationId: sale.locationId } } })
+      if (oilInv) {
+        const invPrev = Number(oilInv.quantity)
+        const invNext = round2(invPrev + restoreMl)
+        await tx.inventory.update({ where: { id: oilInv.id }, data: { quantity: invNext, availableQuantity: invNext - Number(oilInv.reservedQuantity) } })
+      }
+      await tx.stockMovement.create({
+        data: {
+          productId: mv.productId, locationId: sale.locationId, type: 'CREAM_PURE_OIL_RETURN',
+          quantity: restoreMl, previousQuantity: prevMl, resultingQuantity: nextMl,
+          referenceType: 'SALE_CANCEL', referenceId: id, userId,
+          reason: `Pure Oil returned — sale ${sale.saleNumber} cancelled`,
+          notes: `${restoreMl} ml returned to Pure Oil stock`
+        }
+      })
+    }
 
     await tx.sale.update({ where: { id }, data: { status: 'CANCELLED' } })
     await createAuditLog({ db: tx, userId, action: 'SALE_CANCELLED', entity: 'Sale', entityId: id, details: { saleNumber: sale.saleNumber } })

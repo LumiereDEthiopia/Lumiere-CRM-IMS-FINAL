@@ -4,8 +4,10 @@
  */
 import { verifyToken as checkToken, getSession } from '../services/authService.js'
 import { ApiError } from './errorHandler.js'
+import prisma from '../config/prisma.js'
 
-export function authenticate(req, res, next) {
+export async function authenticate(req, res, next) {
+  try {
   const authHeader = req.headers.authorization
   if (!authHeader) {
     return next(new ApiError(401, 'Authentication required'))
@@ -40,8 +42,19 @@ export function authenticate(req, res, next) {
     }
     
     req.token = token
-    req.user = session
-    req.userId = session.userId
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { id: true, isActive: true, role: { select: { name: true, permissions: { select: { name: true } } } } }
+    })
+    if (!user?.isActive) {
+      const { activeSessions } = await import('../services/authService.js')
+      activeSessions.delete(token)
+      return next(new ApiError(401, 'Invalid or expired session'))
+    }
+    session.role = user.role?.name || 'STAFF'
+    session.permissions = user.role?.permissions?.map((permission) => permission.name) || []
+    req.user = { ...session, id: user.id, userId: user.id }
+    req.userId = user.id
     req.authMethod = 'session'
     return next()
   }
@@ -66,6 +79,9 @@ export function authenticate(req, res, next) {
   }
   
   return next(new ApiError(401, 'Invalid authorization format'))
+  } catch (error) {
+    return next(error)
+  }
 }
 
 export function requireAuth(req, res, next) {
