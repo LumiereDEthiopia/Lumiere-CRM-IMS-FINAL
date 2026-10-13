@@ -49,7 +49,7 @@ function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               style={styles.input}
-              placeholder="admin@lumiere.com"
+              placeholder="user@lumiere.com"
             />
           </div>
 
