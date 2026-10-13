@@ -53,7 +53,7 @@ npm run seed:demo           # demo operations: suppliers, customers, employees, 
 npm run dev
 ```
 
-Default admin (after permission seed): `admin@lumiere.com` / `admin123`
+
 
 `npm run seed:demo` is idempotent and safe to re-run — it resets the demo
 operational data (sales, purchases, transfers, inventory, tasks, notifications)
