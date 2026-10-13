@@ -116,7 +116,8 @@ node tests/stage4.test.js
 
 Requires server running with seeded admin:
 
-`admin@lumiere.com` / `admin123`
+const [email, setEmail] = useState('');
+const [password, setPassword] = useState('');
 
 ## Documentation
 
