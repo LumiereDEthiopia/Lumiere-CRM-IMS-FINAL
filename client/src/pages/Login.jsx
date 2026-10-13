@@ -6,8 +6,8 @@ import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 function LoginPage() {
-  const [email, setEmail] = useState('admin@lumiere.com')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState('');
+const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
