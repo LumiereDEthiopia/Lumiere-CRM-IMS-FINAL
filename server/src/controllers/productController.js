@@ -246,7 +246,7 @@ export async function createProduct(req, res, next) {
       }
       const creamSize = creamSizeLabel(size)
       if (!creamSize) {
-        throw new ApiError(400, 'Cream/Jelly size must be 30 ml or 50 ml')
+        throw new ApiError(400, 'Cream/Jelly size must be 50 ml or 100 ml')
       }
       if (!pureOilProductId) {
         throw new ApiError(400, 'Please select a Pure Oil product for Cream/Jelly products')
@@ -401,7 +401,7 @@ export async function updateProduct(req, res, next) {
         throw new ApiError(400, 'Form must be CREAM or JELLY for Cream/Jelly products')
       }
       if (!creamSizeLabel(nextSize)) {
-        throw new ApiError(400, 'Cream/Jelly size must be 30 ml or 50 ml')
+        throw new ApiError(400, 'Cream/Jelly size must be 50 ml or 100 ml')
       }
       if (!nextPureOilId) {
         throw new ApiError(400, 'Please select a Pure Oil product for Cream/Jelly products')
