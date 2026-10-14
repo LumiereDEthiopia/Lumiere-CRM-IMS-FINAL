@@ -10,15 +10,15 @@
 
 // ml of Pure Oil consumed per unit, keyed by the Cream/Jelly size label.
 export const PURE_OIL_ML_PER_UNIT = {
-  '30 ml': 4,
-  '50 ml': 6
+  '50 ml': 4,
+  '100 ml': 6
 }
 
-/** Normalize any size input ('30ML', '30 ml', '30ml') to '30 ml' | '50 ml' | null. */
+/** Normalize any size input ('50ML', '50 ml', '50ml') to '50 ml' | '100 ml' | null. */
 export function creamSizeLabel(value) {
   const s = String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
-  if (s === '30ml' || s === '30 ml' || s === '30') return '30 ml'
   if (s === '50ml' || s === '50 ml' || s === '50') return '50 ml'
+  if (s === '100ml' || s === '100 ml' || s === '100') return '100 ml'
   return null
 }
 
