@@ -19,7 +19,7 @@ const SECTIONS = [
   { key: 'OIL', title: 'Oil', sub: 'Sold by gram' },
   { key: 'PERFUME', title: 'Perfume', sub: '50ml & 100ml bottles' },
   { key: 'MUSK', title: 'Musk', sub: '3 ml units' },
-  { key: 'CREAM', title: 'Cream/Jelly', sub: '30ml & 50ml' },
+  { key: 'CREAM', title: 'Cream/Jelly', sub: '50ml & 100ml' },
 ]
 
 const imgCol = { key: 'images', label: '', width: '50px', render: (imgs) => (
