@@ -3,8 +3,8 @@
  * truth for how much Pure Oil a Cream/Jelly sale consumes.
  *
  * BUSINESS RULE (spec §5/§6):
- *   30 ml Cream/Jelly  ->  4 ml Pure Oil per unit
- *   50 ml Cream/Jelly  ->  6 ml Pure Oil per unit
+ *   50 ml Cream/Jelly  ->  4 ml Pure Oil per unit
+ *   100 ml Cream/Jelly  ->  6 ml Pure Oil per unit
  *
  * The UI only DISPLAYS this (read-only); staff never enters or overrides the
  * amount. The rule lives here in backend logic and is consumed by the sales
@@ -17,18 +17,18 @@
 
 // ml of Pure Oil consumed per single unit, keyed by the Cream/Jelly size label.
 export const PURE_OIL_ML_PER_UNIT = {
-  '30 ml': 4,
-  '50 ml': 6
+  '50 ml': 4,
+  '100 ml': 6
 }
 
 /** The two supported Cream/Jelly size labels. */
-export const CREAM_SIZES = ['30 ml', '50 ml']
+export const CREAM_SIZES = ['50 ml', '100 ml']
 
 /** Normalize any user/size input ('30ML', '30 ml', '30ml') to '30 ml' | '50 ml' | null. */
 export function creamSizeLabel(value) {
   const s = String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
-  if (s === '30ml' || s === '30 ml' || s === '30') return '30 ml'
   if (s === '50ml' || s === '50 ml' || s === '50') return '50 ml'
+  if (s === '100ml' || s === '100 ml' || s === '100') return '100 ml'
   return null
 }
 
