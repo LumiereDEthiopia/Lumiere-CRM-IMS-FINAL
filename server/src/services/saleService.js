@@ -16,8 +16,8 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 /**
  * Pure Oil requirement for ONE Cream/Jelly sale line.
  *
- * Centralizes the business rule (pureOilService.js): 30 ml → 4 ml Pure Oil,
- * 50 ml → 6 ml Pure Oil, per unit. Returns null for every non-Cream line so
+ * Centralizes the business rule (pureOilService.js): 50 ml → 4 ml Pure Oil,
+ * 100 ml → 6 ml Pure Oil, per unit. Returns null for every non-Cream line so
  * Perfume / Oil / Pure Oil / Musk sales are completely unaffected.
  *
  * `product` must expose { productType, size, pureOilProductId }.
@@ -583,7 +583,7 @@ export async function createSale({
         throw new ApiError(400, `Insufficient stock for ${product.name}${soldSize ? ` (${soldSize})` : ''} — only ${available} available`)
       }
 
-      // Cream/Jelly consumes its linked Pure Oil (30 ml → 4 ml, 50 ml → 6 ml per
+      // Cream/Jelly consumes its linked Pure Oil (50 ml → 4 ml, 100 ml → 6 ml per
       // unit). The rule lives in pureOilService.js — the UI only displays it.
       // Aggregate the requirement so a shared Pure Oil is checked once for the
       // whole sale (never allowing a partial/negative draw).
