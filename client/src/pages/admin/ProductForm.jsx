@@ -244,7 +244,7 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
             <option value="OIL">Oil — sold by gram</option>
             <option value="PERFUME">Perfume — 50ml &amp; 100ml bottles</option>
             <option value="MUSK">Musk — 3 ml units</option>
-            <option value="CREAM">Cream/Jelly — 30ml &amp; 50ml</option>
+            <option value="CREAM">Cream/Jelly — 50ml &amp; 100ml</option>
           </select>
         </div>
         {isMusk && (
@@ -264,8 +264,8 @@ function ProductForm({ initialData, onSubmit, onCancel, isEditing, productItems 
               <label>Size *</label>
               <select value={form.size || ''} onChange={(e) => set('size', e.target.value)}>
                 <option value="">Select...</option>
-                <option value="30 ml">30 ml</option>
                 <option value="50 ml">50 ml</option>
+                <option value="100 ml">100 ml</option>
               </select>
             </div>
             <div className="form-field">
